@@ -53,5 +53,8 @@ for dispersion in set(df.dispersion):
         a.set_title(mnames[i], fontsize=40)
         a.set_xlabel('')
         a.set_xlabel('')
-plt.show()
+    out = results_dir(__file__) / f'boxplots_dispersion_{dispersion}.png'
+    plt.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close('all')
+    print(f'wrote {out}')
 

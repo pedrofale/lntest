@@ -3,6 +3,14 @@ import numpy as np
 from lntest import get_LN_lfcs as get_DELN_lfcs
 # scanpy's LFC formula is a baseline, not part of lntest; see baselines.py.
 from baselines import get_scanpy_lfcs
+from paths import results_dir
+
+
+def _save(name):
+    out = results_dir(__file__) / name
+    plt.savefig(out, dpi=200, bbox_inches='tight')
+    plt.close()
+    print(f'wrote {out}')
 import matplotlib.pyplot as plt
 
 """
@@ -79,7 +87,7 @@ plt.ylabel('LFCs')
 plt.title('Scanpy $t$-test')
 plt.legend(fontsize=15)
 plt.tight_layout()
-plt.show()
+_save('Scanpy_confidence_intervals.png')
 
 deln_lfcs, _, gamma = get_DELN_lfcs(Y_raw, X_raw, return_standard_error=True)
 deln_confidence_intervals = deln_lfcs + 1.96 * np.array([-gamma, gamma])
@@ -95,4 +103,5 @@ plt.ylabel('LFCs')
 plt.title("LN's $t$-test")
 plt.legend(fontsize=15)
 plt.tight_layout()
+_save('LNs_confidence_intervals.png')
 plt.show()
