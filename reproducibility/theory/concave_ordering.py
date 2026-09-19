@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import nbinom
 
+from paths import results_dir
+
 # -----------------------------------------------------------------------------
 # 1. Define NB parameters so that both X and Y have the SAME MEAN (mu),
 #    but Y has a LARGER variance => more dispersion => phi_Y > phi_X.
@@ -61,8 +63,8 @@ plt.rcParams.update({'font.size': 30})
 fig, axes = plt.subplots(2, 1, figsize=(20, 10), sharex=True)
 
 # Top: PMFs
-axes[0].plot(k_vals, pmf_X, 'bo-', label=f'$p_X$ = NB($\mu$={mu:.0f}, $\phi$={phiX:.1f})')
-axes[0].plot(k_vals, pmf_Y, 'ro-', label=f'$p_Y$ = NB($\mu$={mu:.0f}, $\phi$={phiY:.1f})')
+axes[0].plot(k_vals, pmf_X, 'bo-', label=rf'$p_X$ = NB($\mu$={mu:.0f}, $\phi$={phiX:.1f})')
+axes[0].plot(k_vals, pmf_Y, 'ro-', label=rf'$p_Y$ = NB($\mu$={mu:.0f}, $\phi$={phiY:.1f})')
 axes[0].set_ylabel("PMF")
 axes[0].legend()
 axes[0].set_title("Negative Binomial Distributions with Same Mean, Different Dispersion")
@@ -76,4 +78,8 @@ axes[1].set_ylabel("sign($p_Y$ - $p_X$)")
 axes[1].set_xlabel("$u$")
 
 plt.tight_layout()
-plt.show()
+
+out = results_dir(__file__) / 'concave_ordering.png'
+fig.savefig(out, dpi=200, bbox_inches='tight')
+plt.close(fig)
+print(f'wrote {out}')
