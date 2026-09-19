@@ -1,0 +1,64 @@
+sources:
+  - name: pbmc3k
+    what: PBMC3k raw 10x matrix, filtered_gene_bc_matrices
+    url: https://cf.10xgenomics.com/samples/cell-exp/1.1.0/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz
+    dest: data/pbmc3k_filtered_gene_bc_matrices.tar.gz
+    sha256: 847d6ebd9a1ec9a768f2be7e40ca42cbfe75ebeb6d76a4c24167041699dc28b5
+    bytes: 7621991
+    extract_to: data
+    # clustering/de.py reads the tarball directly; celltype/preprocess.py wants
+    # the unpacked data/filtered_gene_bc_matrices/hg19/, hence extract_to.
+    arms: [clustering, celltype]
+
+  - name: citeseq-raw
+    what: >-
+      5' PBMC 10k filtered_feature_bc_matrix.h5, the raw input to
+      citeseq/R/pbmc10k_process.R
+    url: https://cf.10xgenomics.com/samples/cell-vdj/5.0.0/sc5p_v2_hs_PBMC_10k/sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5
+    dest: citeseq/data/sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5
+    sha256: d82e92f73fbe01bc2b41b1aa96220617cdbad53ef5387edead67daf5f012cc96
+    bytes: 29938385
+    arms: [citeseq]
+
+  - name: kang2018
+    what: Kang et al. 2018 PBMC IFN-beta dataset, for the celltype arm
+    command: "import pertpy, shutil, pathlib; p = pertpy.data.kang_2018()"
+    dest: data/kang_2018.h5ad
+    sha256: e6a5adac64dcdeb36eaba27db49b63e0c64bb0ed4a64c6705971506b41c39830
+    arms: [celltype]
+
+  - name: kidney-spatial
+    what: Visium HD Human Kidney FFPE, spatial (tissue images and positions)
+    url: https://cf.10xgenomics.com/samples/spatial-exp/3.1.2/Visium_HD_Human_Kidney_FFPE/Visium_HD_Human_Kidney_FFPE_spatial.tar.gz
+    dest: kidney/data/Visium_HD_Human_Kidney_FFPE_spatial.tar.gz
+    sha256: 06a622786ff95046e37cbe533643dbd59c59f11902a98aed9a7dd5daa88dc623
+    bytes: 80586053
+    extract_to: kidney/data
+    arms: [kidney]
+
+  - name: kidney-binned
+    what: Visium HD Human Kidney FFPE, binned_outputs (2um and 16um matrices)
+    url: https://cf.10xgenomics.com/samples/spatial-exp/3.1.2/Visium_HD_Human_Kidney_FFPE/Visium_HD_Human_Kidney_FFPE_binned_outputs.tar.gz
+    dest: kidney/data/Visium_HD_Human_Kidney_FFPE_binned_outputs.tar.gz
+    sha256: null
+    bytes: 6432611994
+    extract_to: kidney/data
+    arms: [kidney]
+
+  - name: lymphnode-segmented
+    what: Visium HD Human Lymph Node FFPE, segmented_outputs (cell segmentations)
+    url: https://cf.10xgenomics.com/samples/spatial-exp/4.0.1/Visium_HD_Human_Lymph_Node_FFPE/Visium_HD_Human_Lymph_Node_FFPE_segmented_outputs.tar.gz
+    dest: lymphnode/data/Visium_HD_Human_Lymph_Node_FFPE_segmented_outputs.tar.gz
+    sha256: null
+    bytes: 1934448662
+    extract_to: lymphnode/data
+    arms: [lymphnode]
+
+  - name: lymphnode-binned
+    what: Visium HD Human Lymph Node FFPE, binned_outputs (2um and 16um matrices)
+    url: https://cf.10xgenomics.com/samples/spatial-exp/4.0.1/Visium_HD_Human_Lymph_Node_FFPE/Visium_HD_Human_Lymph_Node_FFPE_binned_outputs.tar.gz
+    dest: lymphnode/data/Visium_HD_Human_Lymph_Node_FFPE_binned_outputs.tar.gz
+    sha256: null
+    bytes: 2783809559
+    extract_to: lymphnode/data
+    arms: [lymphnode]

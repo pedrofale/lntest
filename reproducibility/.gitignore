@@ -18,6 +18,24 @@ citeseq/results/figures/
 citeseq/results/replicates/
 synthetic_nb/results/nde_mu10_be/
 
+# The CITE-seq rebuild chain's artifacts, ~80 MB per run. citeseq/data/ is
+# un-ignored above so memory_CD4.h5ad can stay committed, which also exposes the
+# 29 MB raw download fetch_data puts beside it -- hence naming it explicitly.
+citeseq/data/sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5
+citeseq/results/*.rds
+citeseq/R/Rplots.pdf
+
+# Figures and metrics the theory and synthetic_nb arms regenerate on demand --
+# theory in ~3 s, null.py in ~24 s. Deliberately not committed: that
+# regenerability is what the 2026-09-16 cleanups bought, and HEAD is already
+# 78 MB of data and results (decision-data-out-of-head).
+#
+# Narrow patterns on purpose: synthetic_nb/results/de_metrics_mu10_nobatch.csv
+# is tracked and must stay that way.
+theory/results/
+synthetic_nb/results/*.png
+synthetic_nb/results/variance_vs_*.csv
+
 # Local caches used to keep Numba/Matplotlib writable under sandboxing
 .numba_cache/
 .mpl_cache/

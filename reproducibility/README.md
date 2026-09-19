@@ -71,23 +71,55 @@ fetched, downloaded or generated.
 | `synthetic_nb` | none — generates its own | **yes** |
 | `theory` | none | **yes** |
 | `nullsplit` | `nullsplit/data/split_{a,b}.csv` (committed) | **yes** |
-| `citeseq` | `citeseq/data/memory_CD4.h5ad` (committed, 16 MB) | **yes** |
-| `clustering` | `data/pbmc3k_filtered_gene_bc_matrices.tar.gz` | no — 7.3 MB public download |
-| `celltype` | `data/pbmcs3k_pre.h5ad`, `data/kang_2018.h5ad` | no — see below |
-| `kidney` | `kidney/data/{merged_blobs_in_cluster_5,podocytes_2um}.h5ad` | no — 6.5 GB download + preprocessing |
-| `lymphnode` | `lymphnode/data/vishd-cluster1-cluster3-2um-with-clusters-subsampled.h5ad` | no — 4.4 GB download + hours |
+| `citeseq` | `citeseq/data/memory_CD4.h5ad` (committed, 16 MB) | **yes** — also rebuildable from a download, see below |
+| `clustering` | `data/pbmc3k_filtered_gene_bc_matrices.tar.gz` | **yes** — `python -m fetch_data --arm clustering` |
+| `celltype` | `data/pbmcs3k_pre.h5ad`, `data/kang_2018.h5ad` | **yes** — `fetch_data --arm celltype`, then `python -m celltype.preprocess` |
+| `kidney` | `kidney/data/{merged_blobs_in_cluster_5,podocytes_2um}.h5ad` | **download yes** — `fetch_data --arm kidney` (6.5 GB), then `preprocess.ipynb` |
+| `lymphnode` | `lymphnode/data/vishd-cluster1-cluster3-2um-with-clusters-subsampled.h5ad` | **download yes** — `fetch_data --arm lymphnode` (4.7 GB), then the reproduce script (hours) |
 
 `data/` and `*/data/` are gitignored, so a file being present in one working copy says nothing about a fresh clone.
 Every entry point checks its input first and exits naming the missing path and where it comes from, rather than failing part-way through.
 
-Fetching the two small ones:
+Fetching them:
 
 ```bash
-mkdir -p data
-curl -o data/pbmc3k_filtered_gene_bc_matrices.tar.gz \
-  http://cf.10xgenomics.com/samples/cell-exp/1.1.0/pbmc3k/pbmc3k_filtered_gene_bc_matrices.tar.gz
-python -c "import pertpy; pertpy.data.kang_2018()"   # caches kang_2018
+python -m fetch_data                  # everything missing, verified against sha256
+python -m fetch_data --arm clustering # just what one arm needs
+python -m fetch_data --list           # what is present, what is not
 ```
+
+`data_sources.yaml` carries a URL for every fetched input — all seven, spatial included — and
+`fetch_data.py` downloads what is missing, verifies it, and unpacks the tarballs.
+
+Verification is two-tier. Four entries are pinned by **sha256**. The three multi-GB spatial archives
+carry a **byte count only**, because computing a digest for them means downloading 11 GB first; those
+report as `SIZE-OK` rather than `OK`, which catches truncation and nothing else. Pin them properly by
+hashing after a download and filling in the `sha256:` field. It is idempotent, and it
+refuses to overwrite a file whose digest does not match rather than silently replacing it.
+
+**CITE-seq rebuilds from its download too**, as of 2026-09-18:
+
+```bash
+python -m fetch_data --arm citeseq          # 30 MB raw 5' PBMC 10k matrix
+cd citeseq/R && Rscript pbmc10k_process.R   # ~17 s -> results/pbmc10k_cd4_memory.rds
+Rscript pbmc10k_to_h5ad.R                   # ~2 min -> data/memory_CD4.h5ad
+```
+
+Verified: the rebuilt `memory_CD4.h5ad` matches the committed one exactly — 1318 x 2035, same cells,
+same genes, `max|dX| = 0`. That also settled which raw file is the source: 10x serves two under the
+same name, and only `cell-vdj/5.0.0` reproduces it, so the entry is now sha256-pinned.
+
+`memory_CD4.h5ad` stays committed for convenience — the rebuild takes ~2 minutes and needs the R
+stack — but it is no longer the only way to get it. Note the rebuilt file is *content*-identical and
+not *byte*-identical: HDF5 containers differ in compression and metadata, so `git status` will show
+it as modified after a rebuild even when nothing in the data changed.
+
+One thing this does **not** do: **no Zenodo DOI exists**, so the non-derivable intermediates named in
+the vault's `decision-data-out-of-head` have nowhere to be fetched from.
+
+Verified 2026-09-18: deleting `data/pbmc3k*` and re-running `python -m fetch_data --arm clustering`
+downloads, verifies and unpacks it, after which `clustering.de` and `celltype.preprocess` both run
+off the fetched matrix.
 
 `data/pbmcs3k_pre.h5ad` is the pbmc3k matrix after standard QC; `clustering/legacy/resolution_sweep.ipynb` writes it, and `clustering/de.py` applies the same QC inline when handed the raw `.tar.gz`.
 
