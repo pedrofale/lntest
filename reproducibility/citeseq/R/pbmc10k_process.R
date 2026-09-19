@@ -14,7 +14,17 @@ results_dir <- "../results/"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 MIN_CELLS <- 3
-seurat <- Read10X_h5("sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5")
+
+# Was a bare filename, so this only worked if you happened to be standing in the
+# directory holding the download. It now reads from citeseq/data/, which is where
+# `python -m fetch_data --arm citeseq` puts it.
+raw_h5 <- paste0(data_dir, "sc5p_v2_hs_PBMC_10k_filtered_feature_bc_matrix.h5")
+if (!file.exists(raw_h5)) {
+  stop(paste0("missing ", raw_h5, "\n",
+              "  what:   the 5' PBMC 10k filtered_feature_bc_matrix, raw input to this arm\n",
+              "  source: run `python -m fetch_data --arm citeseq` from reproducibility/"))
+}
+seurat <- Read10X_h5(raw_h5)
 output_path <- results_dir
 if (!dir.exists(output_path)) {
   dir.create(output_path, recursive = T)
@@ -39,7 +49,9 @@ pbmc10k <- subset(pbmc10k, cells = colnames(pbmc10k)[keep_cells])
 # Identify cell types.
 # Normalize ADT data using CLR.
 pbmc10k <- NormalizeData(pbmc10k, assay = "ADT", normalization.method = "CLR")
-adt_clr_transformed <- t(GetAssayData(pbmc10k, assay = "ADT", slot = "data"))
+# slot= was defunct as of SeuratObject 5.0.0; layer= is the same argument.
+# Lines 39-40 had already been migrated, this one had not.
+adt_clr_transformed <- t(GetAssayData(pbmc10k, assay = "ADT", layer = "data"))
 # Fit Gaussian mixture model to identify CD3+ and CD4++ cells.
 fit_mclust <- function(x, num_clusters) {
   fit <- mclust::Mclust(x, G = num_clusters)
