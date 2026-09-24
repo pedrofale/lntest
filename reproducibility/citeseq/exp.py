@@ -1,7 +1,7 @@
 import os
 import pathlib
 
-from paths import data_dir, fig_name, require_input, results_dir
+from paths import data_dir, fig_name, output_dir, require_input
 import anndata as ann
 import pandas as pd
 import numpy as np
@@ -30,7 +30,7 @@ def plot(ax, true_lfc, est_lfc, title, xlims, ylims, ylabel=False):
 
 # Load the base data
 DATA = data_dir(__file__)
-RESULTS = results_dir(__file__)
+RESULTS = output_dir(__file__)
 memory_CD4 = ann.read_h5ad(require_input(
     DATA / "memory_CD4.h5ad",
     what="memory CD4 T cells from the 10x PBMC10k CITE-seq run, ADT-gated",

@@ -35,6 +35,15 @@ def results_dir(module_file, *, create: bool = True) -> pathlib.Path:
     return d
 
 
+def output_dir(module_file, *, create: bool = True) -> pathlib.Path:
+    """``output/<arm>/``, gitignored: for arms whose ``results/`` holds tracked files."""
+    arm = arm_dir(module_file)
+    d = arm.parent / "output" / arm.name
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def require_input(path, *, what: str, source: str) -> pathlib.Path:
     """Return ``path``, or exit naming what is missing and where it comes from."""
     p = pathlib.Path(path)

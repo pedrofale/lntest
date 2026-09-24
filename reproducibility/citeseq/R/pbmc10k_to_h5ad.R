@@ -8,9 +8,10 @@ library(zellkonverter)
 
 # Paths are relative to this script's directory (citeseq/R/), which is what
 # ZILN.Rproj sets as the R working directory. The arm's committed input lives in
-# citeseq/data/; everything this chain produces goes to citeseq/results/.
+# citeseq/data/; everything this chain produces goes to output/citeseq/, which
+# is gitignored. citeseq/results/ keeps the committed June outputs.
 data_dir <- "../data/"
-results_dir <- "../results/"
+results_dir <- "../../output/citeseq/"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 

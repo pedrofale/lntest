@@ -156,7 +156,7 @@ The NB parameters behind the paper's table are not captured in any config: the s
 ### `citeseq` — CITE-seq, surface protein as ground truth
 
 ```bash
-python -m citeseq.exp                  # WARNING: overwrites tracked files, see Outputs
+python -m citeseq.exp                  # writes to output/citeseq/
 ```
 
 The R stages that build `memory_CD4.h5ad` from the raw 10x download are in `citeseq/R/`, run with `Rscript`.
@@ -318,8 +318,10 @@ The exemption is on the *code*, not the maths: where the manuscript prints a for
 
 ## Outputs and reference values
 
-Results belong in `output/`, which is gitignored: `output/clustering/` and `output/lymphnode/` for those
-arms, `*/results/` for the rest.
+Results belong in `output/`, which is gitignored: `output/clustering/`, `output/lymphnode/` and
+`output/citeseq/`. The synthetic NB and theory arms write to their own `results/`, whose outputs git ignores.
+**Figures, tables and checksums are not committed** — `.gitignore` excludes `*.pdf`, `*.csv`, `*.tex`
+and `*.sha256`; files that were already tracked stay tracked.
 
 **Every output is byte-reproducible except wall-clock timings.** Regenerated twice from scratch on
 2026-09-24, under Bonferroni for every gene-wise test and LN's trigamma as psi_1(a) = 1/a, and checked
@@ -333,15 +335,17 @@ file by file. Three things make that hold, and each is easy to undo by accident:
 The exceptions: `lymphnode/de_time_s_vs_subsampling.pdf`, the `de_time_s` columns of the lymph node CSVs,
 and a timing field in its metadata JSON.
 
-`reference/` holds the checksums; verify one with `shasum -a 256 -c reference/<arm>/checksums.sha256`:
+The checksums of the current outputs live in `output/reference/`, outside git; verify one with
+`shasum -a 256 -c output/reference/<arm>/checksums.sha256`. The committed `reference/` holds the
+June 2026 manifests, which pin the run behind the published PBMC3k and CITE-seq figures.
 
 | Manifest | Files |
 |---|---|
-| `reference/clustering/` | 68 metric CSVs, 22 figures |
-| `reference/citeseq/` | metrics, per-gene results, LaTeX table, 102 figures |
-| `reference/lymphnode/` | 28 figures (the CSVs carry wall-clock columns, so compare them by value) |
-| `reference/synthetic_nb/` | the two variance sweeps and three dispersion boxplots |
-| `reference/theory/` | two figures, two CSVs |
+| `output/reference/clustering/` | 68 metric CSVs, 22 figures |
+| `output/reference/citeseq/` | metrics, per-gene results, LaTeX table, 102 figures |
+| `output/reference/lymphnode/` | 28 figures (the CSVs carry wall-clock columns, so compare them by value) |
+| `output/reference/synthetic_nb/` | the two variance sweeps and three dispersion boxplots |
+| `output/reference/theory/` | two figures, two CSVs |
 
 `reference/unattributed/` holds two `.npy` files no script reads. Read `PROVENANCE.md` before assuming anything about them.
 
@@ -359,7 +363,7 @@ citeseq/results/CD{3,4,45RA}_density_plot.pdf
 synthetic_nb/results/de_metrics_mu10_nobatch.csv
 ```
 
-`python -m citeseq.exp` writes straight over two of them, the CITE-seq CSVs, which now hold the Bonferroni results. Check `git status` after any run, and `git checkout` anything you did not mean to change.
+The CITE-seq arm used to write straight over its tracked CSVs; it now writes to `output/citeseq/`, and the tracked files keep the June outputs. Check `git status` after any run all the same.
 
 ## The equivalence harness
 
