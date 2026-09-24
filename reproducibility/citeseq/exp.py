@@ -1,7 +1,7 @@
 import os
 import pathlib
 
-from paths import data_dir, require_input, results_dir
+from paths import data_dir, fig_name, require_input, results_dir
 import anndata as ann
 import pandas as pd
 import numpy as np
@@ -108,10 +108,10 @@ for i in tqdm(range(replicates), desc="Running replicates"):
     # Method 1: DELN
     lfcs_deln, pvals_deln, se_deln = get_DELN_lfcs(
         X_data_filtered, Y_data_filtered, return_standard_error=True)
-    adj_pvals_deln = smm.multipletests(pvals_deln, alpha=0.05, method='fdr_bh')[1]
+    adj_pvals_deln = smm.multipletests(pvals_deln, alpha=0.05, method='bonferroni')[1]
 
     # Method 2: Wilcoxon
-    corr_method="benjamini-hochberg"
+    corr_method="bonferroni"
     lfcs_w, adj_pvals_w = scanpy_sig_test(X_data_filtered, Y_data_filtered, method="wilcoxon", corr_method=corr_method)
     lfcs_scanpy = -lfcs_w.to_numpy()
 
@@ -156,7 +156,7 @@ for i in tqdm(range(replicates), desc="Running replicates"):
     xlims = [np.min(de_results["true_lfc"]) - 0.2, np.max(de_results["true_lfc"]) + 0.2]
     plot(ax1, de_results['true_lfc'], de_results['ln_lfc'], "LN vs. True LFC", xlims, ylims, ylabel=True)
     plot(ax2, de_results['true_lfc'], de_results['scanpy_lfc'], "Scanpy vs. True LFC", xlims, ylims, ylabel=False)
-    fig.savefig(RESULTS / "figures" / f"lfc_{i}.png")
+    fig.savefig(RESULTS / "figures" / fig_name(f"lfc_{i}"))
     plt.close(fig)
 
     # 9. Save the data so that we can run using Seurat in R.

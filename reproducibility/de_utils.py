@@ -59,6 +59,7 @@ def run_ln_de(
     groups=None,
     reference="rest",
     sparse=True,
+    corr_method="bonferroni",
     **kwargs,
 ):
     """
@@ -73,6 +74,7 @@ def run_ln_de(
         groups=groups,
         reference=reference,
         sparse=sparse,
+        corr_method=corr_method,
         **kwargs,
     )
 
@@ -85,6 +87,7 @@ def run_ttest_de(
     use_raw=False,
     groups=None,
     reference="rest",
+    corr_method="bonferroni",
     **kwargs,
 ):
     """Run Scanpy t-test on layer (default log1p_norm)."""
@@ -93,6 +96,7 @@ def run_ttest_de(
         adata,
         groupby=groupby,
         method="t-test",
+        corr_method=corr_method,
         key_added=key_added,
         layer=layer,
         use_raw=use_raw,
@@ -110,6 +114,7 @@ def run_wilcoxon_de(
     use_raw=False,
     groups=None,
     reference="rest",
+    corr_method="bonferroni",
     **kwargs,
 ):
     """Run Scanpy wilcoxon on layer (default log1p_norm)."""
@@ -118,6 +123,7 @@ def run_wilcoxon_de(
         adata,
         groupby=groupby,
         method="wilcoxon",
+        corr_method=corr_method,
         key_added=key_added,
         layer=layer,
         use_raw=use_raw,
@@ -202,7 +208,7 @@ def run_mast_de(
             by = "primerid"
         )
         colnames(fcHurdle) <- c("names", "pvals", "logfoldchanges")
-        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "BH")
+        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "bonferroni")
         fcHurdle$scores <- -log10(fcHurdle$pvals + 1e-300) * sign(fcHurdle$logfoldchanges)
         mast_result <- fcHurdle
         rm(sca, zlmCond, summaryCond, summaryDt, fcHurdle)
@@ -277,7 +283,7 @@ def run_mast_de(
             by = "primerid"
         )
         colnames(fcHurdle) <- c("names", "pvals", "logfoldchanges")
-        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "BH")
+        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "bonferroni")
         fcHurdle$scores <- -log10(fcHurdle$pvals + 1e-300) * sign(fcHurdle$logfoldchanges)
         mast_result <- fcHurdle
         rm(sca, zlmCond, summaryCond, summaryDt, fcHurdle)

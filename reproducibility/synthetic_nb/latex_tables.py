@@ -1,6 +1,6 @@
 import pandas as pd
 
-from paths import require_input, results_dir
+from paths import fig_name, require_input, results_dir
 import matplotlib.pyplot as plt
 
 df = pd.read_csv(require_input(
@@ -43,7 +43,7 @@ metrics = ['accuracy', 'precision', 'tpr', 'tnr', 'fpr', 'fnr', 'f1']
 mnames = ['Accuracy', 'Precision', 'TPR', 'TNR', 'FPR', 'FNR', 'F1']
 boxprops = dict(linewidth=3)
 whiskerprops = dict(linewidth=3)
-for dispersion in set(df.dispersion):
+for dispersion in sorted(set(df.dispersion)):
     ax = df[df.dispersion == dispersion].boxplot(column=metrics,
                                                  by='method', rot=90, fontsize=35,
                                                  layout=(1, len(metrics)), figsize=(40, 30), boxprops=boxprops,
@@ -53,7 +53,7 @@ for dispersion in set(df.dispersion):
         a.set_title(mnames[i], fontsize=40)
         a.set_xlabel('')
         a.set_xlabel('')
-    out = results_dir(__file__) / f'boxplots_dispersion_{dispersion}.png'
+    out = results_dir(__file__) / fig_name(f'boxplots_dispersion_{dispersion}')
     plt.savefig(out, dpi=200, bbox_inches='tight')
     plt.close('all')
     print(f'wrote {out}')

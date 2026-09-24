@@ -54,7 +54,7 @@ except ImportError:
 
 import numpy as np
 
-from paths import require_input
+from paths import fig_name, require_input
 import pandas as pd
 import scanpy as sc
 import seaborn as sns
@@ -942,6 +942,7 @@ def main():
 
     # ---- Save results ----
     df_results = pd.DataFrame(all_records)
+    df_results = df_results.sort_values(["fraction", "replicate", "cluster", "method"]).reset_index(drop=True)
     print(f"\n[6/8] Saving results to {args.output_dir}/...")
     df_results.to_csv(os.path.join(args.output_dir, "subsampling_results_raw.csv"), index=False)
     agg_cols = {
@@ -999,7 +1000,7 @@ def main():
         ax.set_ylabel(y_col)
         ax.grid(True, axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(args.output_dir, fname), dpi=300)
+        plt.savefig(fig_name(os.path.join(args.output_dir, fname)), dpi=300)
         plt.close()
         # Per-cluster: one panel per cluster
         clusters = sorted(df_results["cluster"].unique())
@@ -1014,7 +1015,7 @@ def main():
             ax.grid(True, axis="y", alpha=0.3)
         axes[0].set_ylabel(y_col)
         plt.tight_layout()
-        plt.savefig(os.path.join(args.output_dir, fname.replace(".png", "_by_cluster.png")), dpi=300)
+        plt.savefig(fig_name(os.path.join(args.output_dir, fname.replace(".png", "_by_cluster.png"))), dpi=300)
         plt.close()
     # Precision@k multi-panel (combined)
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
@@ -1026,7 +1027,7 @@ def main():
         ax.set_xlabel("Sub-sampling fraction (p)")
         ax.grid(True, axis="y", alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(args.output_dir, "precision_at_k_vs_subsampling.png"), dpi=300)
+    plt.savefig(fig_name(os.path.join(args.output_dir, "precision_at_k_vs_subsampling.png")), dpi=300)
     plt.close()
     # Precision@k by cluster
     for k in [10, 20, 50, 100]:
@@ -1045,7 +1046,7 @@ def main():
             ax.set_ylabel(f"Precision@{k}")
             ax.grid(True, axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(args.output_dir, f"precision_at_{k}_vs_subsampling_by_cluster.png"), dpi=300)
+        plt.savefig(fig_name(os.path.join(args.output_dir, f"precision_at_{k}_vs_subsampling_by_cluster.png")), dpi=300)
         plt.close()
     # AUPRC vs Jaccard scatter
     plt.figure(figsize=(10, 8))
@@ -1057,7 +1058,7 @@ def main():
     plt.legend(title="Method")
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(os.path.join(args.output_dir, "auprc_vs_jaccard_scatter.png"), dpi=300)
+    plt.savefig(fig_name(os.path.join(args.output_dir, "auprc_vs_jaccard_scatter.png")), dpi=300)
     plt.close()
     df_lfc = df_results.drop_duplicates(subset=["fraction", "replicate", "method", "cluster"])
     for y_col, fname in [
@@ -1077,7 +1078,7 @@ def main():
         ax.set_ylabel(y_col)
         ax.grid(True, axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(args.output_dir, fname), dpi=300)
+        plt.savefig(fig_name(os.path.join(args.output_dir, fname)), dpi=300)
         plt.close()
         # Per-cluster
         clusters = sorted(df_lfc["cluster"].unique())
@@ -1092,7 +1093,7 @@ def main():
             ax.grid(True, axis="y", alpha=0.3)
         axes[0].set_ylabel(y_col)
         plt.tight_layout()
-        plt.savefig(os.path.join(args.output_dir, fname.replace(".png", "_by_cluster.png")), dpi=300)
+        plt.savefig(fig_name(os.path.join(args.output_dir, fname.replace(".png", "_by_cluster.png"))), dpi=300)
         plt.close()
     # DE time per method (one value per task per method)
     if "de_time_s" in df_results.columns:
@@ -1103,7 +1104,7 @@ def main():
         ax.set_ylabel("DE time (s)")
         ax.grid(True, axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(args.output_dir, "de_time_s_vs_subsampling.png"), dpi=300)
+        plt.savefig(fig_name(os.path.join(args.output_dir, "de_time_s_vs_subsampling.png")), dpi=300)
         plt.close()
 
     # ---- Summary ----

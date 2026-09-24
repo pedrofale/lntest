@@ -11,6 +11,28 @@ library(xtable)
 # citeseq/data/; everything this chain produces goes to citeseq/results/.
 data_dir <- "../data/"
 results_dir <- "../results/"
+# Figures are PDF, matching reproducibility/paths.py on the Python side.
+# LNTEST_FIG_FORMAT overrides the extension for a run.
+fig_ext <- Sys.getenv("LNTEST_FIG_FORMAT", "pdf")
+fig_name <- function(stem) paste0(sub("\\.(png|pdf|eps|svg|jpe?g|tiff?)$", "", stem, ignore.case = TRUE), ".", fig_ext)
+
+# ggsave, but with the PDF timestamp pinned so repeated runs are byte-identical.
+# R's pdf device ignores SOURCE_DATE_EPOCH; the replacement keeps byte offsets.
+ggsave <- function(filename, ...) {
+  ggplot2::ggsave(filename, ...)
+  if (grepl("\\.pdf$", filename)) {
+    x <- readBin(filename, "raw", file.info(filename)$size)
+    for (key in c("CreationDate", "ModDate")) {
+      for (at in grepRaw(paste0("/", key, " \\(D:[0-9]{14}"), x, all = TRUE)) {
+        start <- at + nchar(key) + 5
+        x[start:(start + 13)] <- charToRaw("19700101000000")
+      }
+    }
+    writeBin(x, filename)
+  }
+  invisible(filename)
+}
+
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 
@@ -43,7 +65,7 @@ xt <- results_tbl %>%
   pivot_wider(names_from = Method, values_from = cell) %>%
   arrange(Metric) %>% 
   xtable()
-print(xt, include.rownames = FALSE, type="latex", file = paste0(results_dir, "CITE_seq_metrics.tex"))
+print(xt, include.rownames = FALSE, type="latex", file = paste0(results_dir, "CITE_seq_metrics.tex"), timestamp = NULL)
 
 results[is_signal_gene == TRUE,.(mean((ln_lfc - true_lfc)^2),
                                  mean((scanpy_lfc - true_lfc)^2))] 
@@ -63,7 +85,7 @@ pl <- results_long %>%
   ylab("Estimated LFC") +
   facet_grid(~ Method) 
 pl
-ggsave(paste0(results_dir, "CITE_seq_lfc_plot.png"), pl)
+ggsave(fig_name(paste0(results_dir, "CITE_seq_lfc_plot.png")), pl)
 
 pl <- results_long %>% 
   ggplot(aes(x = true_lfc, y = true_lfc - LFC)) +
@@ -74,7 +96,7 @@ pl <- results_long %>%
   ylab("Bias") +
   facet_grid(~ Method) 
 pl
-ggsave(paste0(results_dir, "CITE_seq_lfc_error_plot.png"), pl)
+ggsave(fig_name(paste0(results_dir, "CITE_seq_lfc_error_plot.png")), pl)
 
 # Load Seurat results
 seurat_lfc_results <- readRDS(paste0(results_dir, "seurat_lfc_results.rds"))
@@ -112,7 +134,7 @@ pl <- merged_results_long %>%
   xlab("True LFC") +
   ylab("Estimated LFC") +
   facet_grid(~ Method) 
-ggsave(glue("{results_dir}CITE_seq_lfc_plot_all_methods.png"), pl)
+ggsave(fig_name(glue("{results_dir}CITE_seq_lfc_plot_all_methods.png")), pl)
 
 pl <- merged_results_long %>% 
   ggplot(aes(x = true_lfc, y = true_lfc - LFC)) +
@@ -123,5 +145,5 @@ pl <- merged_results_long %>%
   ylab("Bias") +
   facet_grid(~ Method) 
 pl
-ggsave(paste0(results_dir, "CITE_seq_lfc_error_plot_all.png"), pl)
+ggsave(fig_name(paste0(results_dir, "CITE_seq_lfc_error_plot_all.png")), pl)
 

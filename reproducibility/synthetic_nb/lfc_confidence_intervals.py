@@ -3,11 +3,11 @@ import numpy as np
 from lntest import get_LN_lfcs as get_DELN_lfcs
 # scanpy's LFC formula is a baseline, not part of lntest; see baselines.py.
 from baselines import get_scanpy_lfcs
-from paths import results_dir
+from paths import fig_name, results_dir
 
 
 def _save(name):
-    out = results_dir(__file__) / name
+    out = results_dir(__file__) / fig_name(name)
     plt.savefig(out, dpi=200, bbox_inches='tight')
     plt.close()
     print(f'wrote {out}')

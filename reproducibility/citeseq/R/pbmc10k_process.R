@@ -11,6 +11,28 @@ library(Seurat)
 # citeseq/data/; everything this chain produces goes to citeseq/results/.
 data_dir <- "../data/"
 results_dir <- "../results/"
+# Figures are PDF, matching reproducibility/paths.py on the Python side.
+# LNTEST_FIG_FORMAT overrides the extension for a run.
+fig_ext <- Sys.getenv("LNTEST_FIG_FORMAT", "pdf")
+fig_name <- function(stem) paste0(sub("\\.(png|pdf|eps|svg|jpe?g|tiff?)$", "", stem, ignore.case = TRUE), ".", fig_ext)
+
+# ggsave, but with the PDF timestamp pinned so repeated runs are byte-identical.
+# R's pdf device ignores SOURCE_DATE_EPOCH; the replacement keeps byte offsets.
+ggsave <- function(filename, ...) {
+  ggplot2::ggsave(filename, ...)
+  if (grepl("\\.pdf$", filename)) {
+    x <- readBin(filename, "raw", file.info(filename)$size)
+    for (key in c("CreationDate", "ModDate")) {
+      for (at in grepRaw(paste0("/", key, " \\(D:[0-9]{14}"), x, all = TRUE)) {
+        start <- at + nchar(key) + 5
+        x[start:(start + 13)] <- charToRaw("19700101000000")
+      }
+    }
+    writeBin(x, filename)
+  }
+  invisible(filename)
+}
+
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 MIN_CELLS <- 3
@@ -89,7 +111,7 @@ pl <- ggplot(adt_clr_transformed_dt, aes(CD3, fill=CD3_cluster)) +
   ylab("Density") +
   ggtitle("CD3 CLR distribution with GMM clustering") + 
   labs(fill = "CD3")
-ggsave(paste0(results_dir, "CD3_density_plot.pdf"), plot = pl)
+ggsave(fig_name(paste0(results_dir, "CD3_density_plot.pdf")), plot = pl)
 
 pl <- ggplot(adt_clr_transformed_dt, aes(CD4, fill=CD4_cluster)) + 
   geom_density() +
@@ -97,7 +119,7 @@ pl <- ggplot(adt_clr_transformed_dt, aes(CD4, fill=CD4_cluster)) +
   ylab("Density") +
   ggtitle("CD4 CLR distribution with GMM clustering") + 
   labs(fill = "CD4")
-ggsave(paste0(results_dir, "CD4_density_plot.pdf"), plot = pl)
+ggsave(fig_name(paste0(results_dir, "CD4_density_plot.pdf")), plot = pl)
 
 # Take a subset of CD3+ and CD4++ cells and identify CD45RA- cells.
 adt_clr_transformed_dt %>% 
@@ -109,7 +131,7 @@ adt_clr_transformed_dt %>%
   ggtitle("CD45RA CLR distribution with GMM clustering") + 
   labs(fill = "CD45RA") -> pl
 pl
-ggsave(paste0(results_dir, "CD45RA_density_plot.pdf"), plot = pl)
+ggsave(fig_name(paste0(results_dir, "CD45RA_density_plot.pdf")), plot = pl)
 
 adt_clr_transformed_dt %>% 
   filter(CD3_cluster == "+" & CD4_cluster == "++" & CD45RA_cluster == "-") %>% 

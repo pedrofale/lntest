@@ -5,7 +5,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 from utils_frozen import digamma, trigamma, get_intervals
-from paths import results_dir
+from paths import fig_name, results_dir
 
 SEED = 0
 
@@ -177,7 +177,7 @@ FIGURES = {
 
 
 def _save(fig, name):
-    out = results_dir(__file__) / name
+    out = results_dir(__file__) / fig_name(name)
     fig.savefig(out, dpi=200, bbox_inches='tight')
     plt.close(fig)
     print(f'wrote {out}')

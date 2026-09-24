@@ -6,7 +6,7 @@ import statsmodels.stats.multitest as smm
 from lntest import get_LN_lfcs
 import matplotlib.pyplot as plt
 from baselines import scanpy_sig_test, get_test_results
-from paths import results_dir
+from paths import fig_name, results_dir
 
 NX = 1000
 NY = 1000
@@ -81,10 +81,10 @@ def run(base_mu, metric, seed=0):
 
     out = results_dir(__file__)
     stem = f'variance_vs_{metric}_mu{int(base_mu)}'
-    fig.savefig(out / f'{stem}.png', dpi=200, bbox_inches='tight')
+    fig.savefig(out / fig_name(stem), dpi=200, bbox_inches='tight')
     plt.close(fig)
     pd.DataFrame(rows).to_csv(out / f'{stem}.csv', index=False)
-    print(f'wrote {out / stem}.{{png,csv}}')
+    print(f'wrote {out / fig_name(stem)} and {out / stem}.csv')
 
 
 if __name__ == '__main__':

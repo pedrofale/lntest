@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import nbinom
 
-from paths import results_dir
+from paths import fig_name, results_dir
 
 # -----------------------------------------------------------------------------
 # 1. Define NB parameters so that both X and Y have the SAME MEAN (mu),
@@ -79,7 +79,7 @@ axes[1].set_xlabel("$u$")
 
 plt.tight_layout()
 
-out = results_dir(__file__) / 'concave_ordering.png'
+out = results_dir(__file__) / fig_name('concave_ordering.png')
 fig.savefig(out, dpi=200, bbox_inches='tight')
 plt.close(fig)
 print(f'wrote {out}')

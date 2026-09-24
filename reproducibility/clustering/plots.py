@@ -27,7 +27,10 @@ import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+import numpy as np
 import seaborn as sns
+
+from paths import fig_name
 
 def load_config(config_path):
     """Load configuration from YAML file, if present."""
@@ -156,6 +159,7 @@ def main():
             data=df, x="resolution", y=ycol, hue="method", showfliers=False,
             order=resolution_order, hue_order=hue_order,
         )
+        np.random.seed(0)  # seaborn's jitter draws from the global RNG
         sns.stripplot(
             data=df, x="resolution", y=ycol, hue="method", dodge=True, alpha=0.6,
             color='k', zorder=10, size=4, order=resolution_order, hue_order=hue_order,
@@ -172,7 +176,7 @@ def main():
         plt.title(title)
         plt.grid(True, axis="y", alpha=0.3)
         plt.tight_layout()
-        plt.savefig(os.path.join(output_dir, fname), dpi=300, bbox_inches='tight')
+        plt.savefig(fig_name(os.path.join(output_dir, fname)), dpi=300, bbox_inches='tight')
         plt.close()
 
     # ---- Signature-set-independent boxplots ----
@@ -301,7 +305,7 @@ def main():
                     f"— {taglab}{scale_note}",
                     fontsize=14,
                 )
-                savepath = os.path.join(output_dir, f"{out_prefix}_{tag}_{method}.png")
+                savepath = fig_name(os.path.join(output_dir, f"{out_prefix}_{tag}_{method}"))
                 fig.savefig(savepath, dpi=200, bbox_inches="tight")
                 plt.close(fig)
 

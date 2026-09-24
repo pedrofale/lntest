@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from paths import require_input
+from paths import fig_name, require_input
 import json
 import matplotlib.pyplot as plt
 import argparse
@@ -80,7 +80,7 @@ def plot_tpr_fpr_results(csv_file, output_file):
     axes[1].set_ylim([0, 1])
     
     plt.tight_layout()
-    plt.savefig(output_file, format='eps', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
@@ -142,7 +142,7 @@ def plot_ap_pr_auc_results(csv_file, output_file):
     axes[1].set_ylim([0, 1])
     
     plt.tight_layout()
-    plt.savefig(output_file, format='eps', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
@@ -218,7 +218,7 @@ def plot_pr_curves_all_p(json_file, output_file, q, lfc):
     
     plt.tight_layout()
     # Use PNG format for the subplot version
-    plt.savefig(output_file, format='png', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
@@ -284,7 +284,7 @@ def plot_pr_curves_selected_p(json_file, output_file, q, lfc):
     ax.set_ylim([0, 1])
     
     plt.tight_layout()
-    plt.savefig(output_file, format='eps', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
@@ -419,7 +419,7 @@ def plot_summary_figure(csv_file, json_file, output_file, q, lfc):
     pattern_labels = [f"p={p:.3f}" for p in selected_p]
     ax_prcurves.legend(pattern_handles, pattern_labels, loc='lower left', fontsize=20, frameon=True)
     plt.tight_layout(rect=[0, 0, 1, 0.96])  # leave space for global legend
-    plt.savefig(output_file, format='eps', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
@@ -451,23 +451,23 @@ if __name__ == '__main__':
     
     # Plot 1: TPR and FPR
     print("Plotting TPR and FPR...")
-    plot_tpr_fpr_results(csv_file, f"{output_prefix}_tpr_fpr.eps")
+    plot_tpr_fpr_results(csv_file, fig_name(f"{output_prefix}_tpr_fpr"))
     
     # Plot 2: AP and PR-AUC
     print("Plotting AP and PR-AUC...")
-    plot_ap_pr_auc_results(csv_file, f"{output_prefix}_ap_pr_auc.eps")
+    plot_ap_pr_auc_results(csv_file, fig_name(f"{output_prefix}_ap_pr_auc"))
     
     # Plot 3: PR curves for all p values
     print("Plotting PR curves for all p values...")
-    plot_pr_curves_all_p(json_file, f"{output_prefix}_pr_curves_all_p.eps", q, lfc)
+    plot_pr_curves_all_p(json_file, fig_name(f"{output_prefix}_pr_curves_all_p"), q, lfc)
     
     # Plot 4: PR curves for selected p values (min, median, max)
     print("Plotting PR curves for selected p values...")
-    plot_pr_curves_selected_p(json_file, f"{output_prefix}_pr_curves_selected_p.eps", q, lfc)
+    plot_pr_curves_selected_p(json_file, fig_name(f"{output_prefix}_pr_curves_selected_p"), q, lfc)
     
     # Plot 5: Summary figure (TPR/FPR/PR-AUC + selected PR curves)
     print("Plotting summary figure...")
-    plot_summary_figure(csv_file, json_file, f"{output_prefix}_summary.eps", q, lfc)
+    plot_summary_figure(csv_file, json_file, fig_name(f"{output_prefix}_summary"), q, lfc)
     
     print("Done!")
 

@@ -3,7 +3,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from paths import require_input
+from paths import fig_name, require_input
 import matplotlib.pyplot as plt
 import argparse
 
@@ -105,7 +105,7 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None)
     ax.set_aspect(aspect_ratio, adjustable='box')
     
     plt.tight_layout()
-    plt.savefig(output_file, format='eps', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot FPR results from CSV file')
     parser.add_argument('--csv_file', type=str, required=True,
                         help='Input CSV file with FPR results')
-    parser.add_argument('--output', type=str, default='fpr_plot.eps',
+    parser.add_argument('--output', type=str, default=fig_name('fpr_plot'),
                         help='Output file for the plot (default: fpr_plot.eps)')
     parser.add_argument('--aspect_ratio', type=float, default=1.0,
                         help='Aspect ratio for the plot (default: 1.0)')

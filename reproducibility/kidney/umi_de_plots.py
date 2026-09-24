@@ -9,7 +9,7 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from paths import require_input
+from paths import fig_name, require_input
 import matplotlib.pyplot as plt
 import matplotlib
 
@@ -168,7 +168,7 @@ def plot_de_results(csv_file, output_file, title_suffix=None):
     # Ensure output file has .eps extension
     if not output_file.endswith('.eps'):
         output_file = output_file.rsplit('.', 1)[0] + '.eps'
-    plt.savefig(output_file, format='eps', dpi=300, bbox_inches='tight')
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 

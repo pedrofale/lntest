@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import pandas as pd
 
-from paths import data_dir, require_input
+from paths import data_dir, fig_name, require_input
 import json
 from sklearn.metrics import average_precision_score, precision_recall_curve, auc
 
@@ -899,7 +899,7 @@ if __name__ == '__main__':
                         help='Number of repetitions per p value (default: 100)')
     parser.add_argument('--n_jobs', type=int, default=None,
                         help='Number of parallel jobs (default: all available cores)')
-    parser.add_argument('--output', type=str, default='shape_split_test_plot.png',
+    parser.add_argument('--output', type=str, default=fig_name('shape_split_test_plot'),
                         help='Output file for the plot (default: shape_split_test_plot.png)')
     parser.add_argument('--results_file', type=str, default=None,
                         help='Output file for results CSV (default: auto-generated from output name)')
