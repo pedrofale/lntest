@@ -1,8 +1,6 @@
 import numpy as np
-# Behind main_rSEQ's fig:sc_confidence_intervals.
 from lntest import get_LN_lfcs as get_DELN_lfcs
-# scanpy's LFC formula is a baseline, not part of lntest; see baselines.py.
-from baselines import get_scanpy_lfcs
+from baselines import scanpy_sig_test
 from paths import fig_name, results_dir
 
 
@@ -52,7 +50,7 @@ true_lfcs = np.log2(mu2 * np.exp(-1.) / mu1)
 non_de_idx = (true_lfcs == 0.).reshape(-1)
 
 
-sc_lfcs = get_scanpy_lfcs(X, Y, normalize=True)
+sc_lfcs = scanpy_sig_test(X, Y)[0].to_numpy()  # the Series index is in ranked order
 X_raw, Y_raw = X.copy(), Y.copy()
 # this is how Scanpy calculates the statistics used in the t test (based on their code)
 # the results here were reproduced in the debugging console within the scanpy code, too
