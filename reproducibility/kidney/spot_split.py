@@ -12,6 +12,7 @@ from collections import defaultdict
 import pandas as pd
 
 from paths import data_dir, fig_name, require_input
+from method_colors import method_color
 import json
 from sklearn.metrics import average_precision_score, precision_recall_curve, auc
 
@@ -667,7 +668,7 @@ def save_pr_curve_data(p_values, results_by_p, output_file, q, lfc):
 def plot_fpr_results(p_values, results_by_p, output_file):
     """Plot log10(FPR) and log10(FPR Filtered) vs p for all methods."""
     methods = list(results_by_p[p_values[0]].keys())
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+    colors = [method_color(m) for m in methods]
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     
@@ -710,7 +711,7 @@ def plot_fpr_results(p_values, results_by_p, output_file):
 def plot_de_results(p_values, results_by_p, output_file, q, lfc):
     """Plot TPR, FPR, FNR, and TNR vs p for all methods."""
     methods = list(results_by_p[p_values[0]].keys())
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+    colors = [method_color(m) for m in methods]
     
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
     
@@ -787,7 +788,7 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
 def plot_pr_results(p_values, results_by_p, output_file):
     """Plot Average Precision (AP) and PR-AUC vs p for all methods."""
     methods = list(results_by_p[p_values[0]].keys())
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+    colors = [method_color(m) for m in methods]
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     
@@ -828,7 +829,7 @@ def plot_pr_results(p_values, results_by_p, output_file):
 def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
     """Plot Precision vs Recall curves for each p value (PR curves based on gene ranking)."""
     methods = list(results_by_p[p_values[0]].keys())
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+    colors = [method_color(m) for m in methods]
     
     # Create subplots: one for each p value
     n_p = len(p_values)

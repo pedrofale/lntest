@@ -146,7 +146,9 @@ off the fetched matrix.
 python -m synthetic_nb.small_test      # ~10 s. The reviewer-facing single run
 python -m synthetic_nb.de_test         # -> synthetic_nb/results/nde_mu10_be/
 python -m synthetic_nb.latex_tables    # formats de_test's CSV
-python -m synthetic_nb.null
+python -m synthetic_nb.null            # base_mu 50 by default
+python -m synthetic_nb.null --base-mu 5
+python -m synthetic_nb.null_ratio      # both sweeps on one panel, against Var(Y)/Var(X)
 python -m synthetic_nb.lfc_confidence_intervals
 ```
 

@@ -55,6 +55,7 @@ except ImportError:
 import numpy as np
 
 from paths import fig_name, require_input
+from method_colors import MEDIANPROPS, method_color
 import pandas as pd
 import scanpy as sc
 import seaborn as sns
@@ -119,14 +120,14 @@ def _plot_box_pandas(df, x_col, y_col, hue_col, ax=None):
             pos = xi + (hi - (n_hue - 1) / 2) * width * 1.1
             bp = ax.boxplot(
                 [vals.values], positions=[pos], widths=width * 0.9,
-                patch_artist=True, showfliers=False,
+                patch_artist=True, showfliers=False, medianprops=MEDIANPROPS,
             )
             for box in bp["boxes"]:
-                box.set_facecolor(plt.cm.tab10(hi % 10))
+                box.set_facecolor(method_color(h))
     ax.set_xticks(range(len(x_vals)))
     ax.set_xticklabels([str(x) for x in x_vals])
     from matplotlib.patches import Patch
-    handles = [Patch(facecolor=plt.cm.tab10(i % 10)) for i in range(len(hue_vals))]
+    handles = [Patch(facecolor=method_color(h)) for h in hue_vals]
     ax.legend(handles=handles, labels=hue_vals, title=hue_col)
     return ax
 
@@ -1052,7 +1053,8 @@ def main():
     plt.figure(figsize=(10, 8))
     for method in df_results["method"].unique():
         subset = df_results[df_results["method"] == method]
-        plt.scatter(subset["jaccard_top"], subset["auprc"], alpha=0.3, label=method, s=20)
+        plt.scatter(subset["jaccard_top"], subset["auprc"], alpha=0.3, label=method, s=20,
+                    color=method_color(method))
     plt.xlabel(f"Jaccard (top {config['top_genes']} genes)")
     plt.ylabel("AUPRC")
     plt.legend(title="Method")

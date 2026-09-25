@@ -2,6 +2,7 @@ import numpy as np
 from lntest import get_LN_lfcs as get_DELN_lfcs
 from baselines import scanpy_sig_test
 from paths import fig_name, results_dir
+from method_colors import method_color
 
 
 def _save(name):
@@ -77,9 +78,9 @@ print(f"Estimated LFC is above CI {np.sum(sc_lfcs[non_de_idx] > confidence_inter
 print(f"Frequency of estimated LFC that are above CI {np.sum(sc_lfcs[non_de_idx] > confidence_intervals[1, non_de_idx]) / np.sum(non_de_idx)} for  non-DEGs")
 print()
 plt.rcParams.update({'font.size': 20})
-plt.errorbar(true_lfcs[0], (mean_Y - mean_X) / np.log(2), yerr=1.96 * se, fmt='none', label='Estimated CIs', color='green')
-plt.plot(true_lfcs[0], sc_lfcs, 'o', label='Estimated LFCs')
-plt.plot(true_lfcs[0], true_lfcs[0], 'o', label='True LFCs')
+plt.errorbar(true_lfcs[0], (mean_Y - mean_X) / np.log(2), yerr=1.96 * se, fmt='none', label='Estimated CIs', color=method_color('t-test'), alpha=0.5)
+plt.plot(true_lfcs[0], sc_lfcs, 'o', label='Estimated LFCs', color=method_color('t-test'))
+plt.plot(true_lfcs[0], true_lfcs[0], 'o', label='True LFCs', color='0.7')
 plt.xlabel('LFCs')
 plt.ylabel('LFCs')
 plt.title('Scanpy $t$-test')
@@ -93,9 +94,9 @@ print(f"LN's Estimated LFC is below CI {np.sum(deln_lfcs < deln_confidence_inter
 print(f"LN's Estimated LFC is above CI {np.sum(deln_lfcs > deln_confidence_intervals[1])} times")
 
 plt.rcParams.update({'font.size': 20})
-plt.errorbar(true_lfcs[0], deln_lfcs, yerr=1.96 * gamma, fmt='none', label='Estimated CIs', color='green')
-plt.plot(true_lfcs[0], deln_lfcs, 'o', label='Estimated LFCs')
-plt.plot(true_lfcs[0], true_lfcs[0], 'o', label='True LFCs')
+plt.errorbar(true_lfcs[0], deln_lfcs, yerr=1.96 * gamma, fmt='none', label='Estimated CIs', color=method_color('LN'), alpha=0.5)
+plt.plot(true_lfcs[0], deln_lfcs, 'o', label='Estimated LFCs', color=method_color('LN'))
+plt.plot(true_lfcs[0], true_lfcs[0], 'o', label='True LFCs', color='0.7')
 plt.xlabel('LFCs')
 plt.ylabel('LFCs')
 plt.title("LN's $t$-test")

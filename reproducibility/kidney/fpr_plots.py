@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from paths import fig_name, require_input
+from method_colors import method_color
 import matplotlib.pyplot as plt
 import argparse
 
@@ -50,8 +51,7 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None)
     p_values = sorted(df['p'].unique())
     
     # Create color map
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_colors = {method: colors[i] for i, method in enumerate(methods)}
+    method_colors = {method: method_color(method) for method in methods}
     
     # Create the plot
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))

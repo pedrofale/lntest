@@ -31,6 +31,7 @@ import numpy as np
 import seaborn as sns
 
 from paths import fig_name
+from method_colors import MEDIANPROPS, method_color
 
 def load_config(config_path):
     """Load configuration from YAML file, if present."""
@@ -158,11 +159,14 @@ def main():
         sns.boxplot(
             data=df, x="resolution", y=ycol, hue="method", showfliers=False,
             order=resolution_order, hue_order=hue_order,
+            palette={m: method_color(m) for m in hue_order}, saturation=1,
+            medianprops=MEDIANPROPS,
         )
         np.random.seed(0)  # seaborn's jitter draws from the global RNG
         sns.stripplot(
-            data=df, x="resolution", y=ycol, hue="method", dodge=True, alpha=0.6,
-            color='k', zorder=10, size=4, order=resolution_order, hue_order=hue_order,
+            data=df, x="resolution", y=ycol, hue="method", dodge=True, alpha=0.8,
+            palette={m: 'white' for m in hue_order}, edgecolor='k', linewidth=0.6,
+            zorder=10, size=4, order=resolution_order, hue_order=hue_order,
         )
         ax = plt.gca()
         handles, labels = ax.get_legend_handles_labels()

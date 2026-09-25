@@ -2,6 +2,7 @@ import os
 import pathlib
 
 from paths import data_dir, fig_name, output_dir, require_input
+from method_colors import method_color
 import anndata as ann
 import pandas as pd
 import numpy as np
@@ -11,8 +12,8 @@ import statsmodels.stats.multitest as smm
 from baselines import get_test_results, scanpy_sig_test
 from tqdm import tqdm
 
-def plot(ax, true_lfc, est_lfc, title, xlims, ylims, ylabel=False):
-    ax.scatter(true_lfc, est_lfc)
+def plot(ax, true_lfc, est_lfc, title, xlims, ylims, color, ylabel=False):
+    ax.scatter(true_lfc, est_lfc, color=color)
     ax.set_xlim(xlims)
     ax.set_ylim(ylims)
     global_min = np.min([xlims[0], ylims[0]])
@@ -154,8 +155,8 @@ for i in tqdm(range(replicates), desc="Running replicates"):
     ])
     ylims = [np.min(all_vals) - 0.2, np.max(all_vals) + 0.2]
     xlims = [np.min(de_results["true_lfc"]) - 0.2, np.max(de_results["true_lfc"]) + 0.2]
-    plot(ax1, de_results['true_lfc'], de_results['ln_lfc'], "LN vs. True LFC", xlims, ylims, ylabel=True)
-    plot(ax2, de_results['true_lfc'], de_results['scanpy_lfc'], "Scanpy vs. True LFC", xlims, ylims, ylabel=False)
+    plot(ax1, de_results['true_lfc'], de_results['ln_lfc'], "LN vs. True LFC", xlims, ylims, method_color('LN'), ylabel=True)
+    plot(ax2, de_results['true_lfc'], de_results['scanpy_lfc'], "Scanpy vs. True LFC", xlims, ylims, method_color('t-test'), ylabel=False)
     fig.savefig(RESULTS / "figures" / fig_name(f"lfc_{i}"))
     plt.close(fig)
 

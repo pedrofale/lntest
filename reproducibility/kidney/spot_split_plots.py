@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from paths import fig_name, require_input
+from method_colors import method_color
 import json
 import matplotlib.pyplot as plt
 import argparse
@@ -33,9 +34,7 @@ def plot_tpr_fpr_results(csv_file, output_file):
     methods = df['method'].unique()
     p_values = sorted(df['p'].unique())
     
-    # Use same colors as original script (tab10 colormap)
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_to_color = {method: colors[i] for i, method in enumerate(methods)}
+    method_to_color = {method: method_color(method) for method in methods}
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     
@@ -97,9 +96,7 @@ def plot_ap_pr_auc_results(csv_file, output_file):
     methods = df['method'].unique()
     p_values = sorted(df['p'].unique())
     
-    # Use same colors as original script (tab10 colormap)
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_to_color = {method: colors[i] for i, method in enumerate(methods)}
+    method_to_color = {method: method_color(method) for method in methods}
     
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     
@@ -159,9 +156,7 @@ def plot_pr_curves_all_p(json_file, output_file, q, lfc):
     first_p_key = list(curves.keys())[0]
     methods = list(curves[first_p_key].keys())
     
-    # Use same colors as original script (tab10 colormap)
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_to_color = {method: colors[i] for i, method in enumerate(methods)}
+    method_to_color = {method: method_color(method) for method in methods}
     
     # Create subplots: one for each p value
     n_p = len(p_values)
@@ -235,9 +230,7 @@ def plot_pr_curves_selected_p(json_file, output_file, q, lfc):
     first_p_key = list(curves.keys())[0]
     methods = list(curves[first_p_key].keys())
     
-    # Use same colors as original script (tab10 colormap)
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_to_color = {method: colors[i] for i, method in enumerate(methods)}
+    method_to_color = {method: method_color(method) for method in methods}
     
     # Select p values: smallest, largest, and closest to median
     p_sorted = sorted(p_values)
@@ -308,8 +301,7 @@ def plot_summary_figure(csv_file, json_file, output_file, q, lfc):
     curves = curve_data['curves']
     # Methods from CSV (ensures alignment with DE summaries)
     methods = df['method'].unique()
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_to_color = {method: colors[i] for i, method in enumerate(methods)}
+    method_to_color = {method: method_color(method) for method in methods}
     # Select p values: min, median (closest), max from JSON (where PR curves exist)
     p_sorted = np.sort(p_values_json)
     p_min = p_sorted[0]

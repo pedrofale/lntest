@@ -12,6 +12,7 @@ from collections import defaultdict
 import pandas as pd
 
 from paths import data_dir, fig_name, require_input
+from method_colors import method_color
 
 # Run from reproducibility/ as `python -m kidney.umi_de`, which puts that
 # directory on sys.path -- no path manipulation needed.
@@ -253,7 +254,7 @@ def save_results(p_values, results_by_p, output_file, q, lfc):
 def plot_results(p_values, results_by_p, output_file, q, lfc):
     """Plot TPR, FPR, FNR, and TNR vs p for all methods."""
     methods = list(results_by_p[p_values[0]].keys())
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+    colors = [method_color(m) for m in methods]
     
     fig, axes = plt.subplots(2, 2, figsize=(14, 12))
     

@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 from paths import fig_name, require_input
+from method_colors import method_color
 import matplotlib.pyplot as plt
 import matplotlib
 
@@ -101,8 +102,7 @@ def plot_de_results(csv_file, output_file, title_suffix=None):
     method_renames = {method: rename_method(method) for method in methods}
     
     # Set up colors
-    colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
-    method_colors = {method: colors[i] for i, method in enumerate(methods)}
+    method_colors = {method: method_color(method) for method in methods}
     
     # Create figure with 2 subplots (side by side)
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))

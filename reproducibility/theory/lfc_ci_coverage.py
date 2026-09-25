@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 
 from utils_frozen import digamma, trigamma, get_intervals
 from paths import fig_name, results_dir
+from method_colors import method_color
 
 SEED = 0
 
@@ -148,9 +149,9 @@ def lfc_coverage():
                     (np.exp(lfc) > lfc_normal_intervals[0, :]) * (np.exp(lfc) < lfc_normal_intervals[1, :]))) / experiments
                 coverage_normal.append(coverage_percentage)
             print(model + ":", coverage_percentage)
-    ax[2].plot(n_list, coverage_ziln, color='b', label='ZILN')
-    ax[2].plot(n_list, coverage_normal, color='r', label='normal')
-    ax[2].plot(n_list, coverage_log1p, color='magenta', label='log1p')
+    ax[2].plot(n_list, coverage_ziln, color=method_color('ZILN'), label='ZILN')
+    ax[2].plot(n_list, coverage_normal, color='0.5', label='normal')
+    ax[2].plot(n_list, coverage_log1p, color=method_color('log1p'), label='log1p')
     ax[2].hlines(0.95, n_list[0], n_list[-1], color='black', linestyle='--', label='95% coverage')
     ax[2].legend(loc='best')
     ax[2].set_xlabel('$n$')
