@@ -13,7 +13,7 @@ python -m <arm>.<script>          # e.g. python -m synthetic_nb.small_test
 ```
 
 Not `python synthetic_nb/small_test.py`.
-The `-m` form puts the **working directory** on `sys.path`, so a script inside an arm can import the shared modules that sit beside the arms — `paths`, `baselines`, `de_utils`, `evaluation_utils`, `utils_frozen` — with no `__init__.py`, no packaging file for `reproducibility/`, and no `sys.path` manipulation.
+The `-m` form puts the **working directory** on `sys.path`, so a script inside an arm can import the shared modules that sit beside the arms — `paths`, `method_colors`, `baselines`, `de_utils`, `evaluation_utils`, `utils_frozen` — with no `__init__.py`, no packaging file for `reproducibility/`, and no `sys.path` manipulation.
 Running a script by path puts *its own directory* on `sys.path` instead, and the shared imports fail.
 
 **Notebooks are the exception.** Run a notebook from the arm directory that contains it; each does `sys.path.append('../')` in its first cell to reach the same shared modules.
@@ -144,15 +144,24 @@ off the fetched matrix.
 
 ```bash
 python -m synthetic_nb.small_test      # ~10 s. The reviewer-facing single run
-python -m synthetic_nb.de_test         # -> synthetic_nb/results/nde_mu10_be/
-python -m synthetic_nb.latex_tables    # formats de_test's CSV
-python -m synthetic_nb.null            # base_mu 50 by default
+python -m synthetic_nb.de_test         # ~3 min; sparse genes -> synthetic_nb/results/nde_mu10/
+python -m synthetic_nb.de_test --setting dense       # -> synthetic_nb/results/nde_mu100/
+python -m synthetic_nb.de_ratio        # both settings: the five metrics against Var(X)/Var(Y)
+python -m synthetic_nb.latex_tables    # formats the sparse CSV as a LaTeX table
+python -m synthetic_nb.null            # ~35 s; base_mu 50 by default
 python -m synthetic_nb.null --base-mu 5
-python -m synthetic_nb.null_ratio      # both sweeps on one panel, against Var(Y)/Var(X)
+python -m synthetic_nb.null_ratio      # one figure per sweep, against Var(Y)/Var(X)
 python -m synthetic_nb.lfc_confidence_intervals
 ```
 
+`null.py` samples a grid of variance ratios by default: Var(X) is 1, 2, 4 and 8 times the mean (1 is Poisson), and Var(Y)/Var(X) runs from 1 to 16 in quarter-octave steps.
+Ratios below 1 would repeat the same settings with the groups swapped: both tests are two-sided and the groups are the same size.
+Its outputs carry a `_ratio_grid` suffix.
+`--grid dispersion` is the grid behind RECOMB Fig 1 — the same 20 values of Var(Y) for every Var(X) — and writes the unsuffixed `variance_vs_fpr_mu{5,50}.*` that `output/reference/synthetic_nb/` checksums.
+
 `small_test.py` reproduces **one** run of a table averaged over 20; its numbers are not expected to match the paper exactly.
+`de_test.py`'s `sparse` setting has RECOMB Table 2's design and its `dense` setting Table 1's, without the batch effect both tables were run with and the paper does not describe: the first half of each group's cells had every mean multiplied by e.
+So this script does not reproduce the printed numbers; the git history does, with Bonferroni: Table 2 from `large_scale_NB_DE_test.py` at commit `2ed26e3`, and Table 1 from the same script at `1bbcb0a` with 10,000 cells per group.
 The NB parameters behind the paper's table are not captured in any config: the submission said they "need to be adjusted according to the text", and nothing here records what they were.
 
 ### `citeseq` — CITE-seq, surface protein as ground truth
@@ -245,11 +254,27 @@ Took ~9 min on an M-series laptop; produces 161 capsules over 18,085 genes, whic
 ```bash
 python -m kidney.umi_null   --n_cells_remove 35 --n_reps 10000
 python -m kidney.umi_de     --n_cells_remove 35 --q 0.005 --lfc 3 --p_min 0.125 --n_reps 10000
-python -m kidney.spot_split --n_shape_ids_remove <unrecorded>
 python -m kidney.fpr_plots        --csv_file <umi_null results.csv>
 python -m kidney.umi_de_plots     --input <umi_de results.csv> --output de.eps
-python -m kidney.spot_split_plots --csv_file <csv> --json_file <json>
 ```
+
+Spot splitting, behind the two kidney panels both manuscripts show (`2um_nodeg_fpr`,
+`withdeg_2um_100rep_with_auc_lfc3_pretty_plot_summary`). About 4 minutes per run on a 16 GB laptop, 8 workers:
+
+```bash
+python -m kidney.spot_split --n_shape_ids_remove 0 --n_reps 100 --output output/kidney/2um_nodeg.pdf
+python -m kidney.spot_split --n_shape_ids_remove 0 --q 0.005 --lfc 3 --n_reps 100 \
+    --output output/kidney/withdeg_2um_100rep_with_auc_lfc3.pdf
+python -m kidney.fpr_plots --csv_file output/kidney/2um_nodeg_results.csv \
+    --output output/kidney/2um_nodeg_fpr.pdf --aspect_ratio 0.045 \
+    --title_suffix '-no DEGs' --p_label 'Split probability'
+python -m kidney.spot_split_plots \
+    --csv_file output/kidney/withdeg_2um_100rep_with_auc_lfc3_results.csv \
+    --json_file output/kidney/withdeg_2um_100rep_with_auc_lfc3_pr_curve_data.json \
+    --output_prefix output/kidney/withdeg_2um_100rep_with_auc_lfc3_pretty_plot
+```
+
+`spot_split` draws no figure; its `--output` only names the results files.
 
 **These parameters come from the manuscript, not from the code.** `--n_cells_remove`, `--q` and
 `--lfc` are `required=True` with no defaults, so nothing in this repository records what was run;
@@ -269,9 +294,16 @@ amplified by LFC log2-units cannot survive downsampling below that ratio. **No c
 Change `--lfc` and you must change `--p_min` with it; the script defaults (`p_min 0.1`) satisfy the
 constraint for LFC=3 only by being close to 0.125, and violate it for any LFC below 3.
 
-`spot_split`'s capsule filter is left unfilled on purpose: the spot-subsampling section states no
-such filtering, so there is no published value to copy. Its `p_min 0.1 / p_max 0.5` defaults do
-match the paper's illustrated splitting probabilities of 0.5, 0.3 and 0.1.
+`spot_split`'s capsule filter has no published value: the spot-subsampling section states no
+filtering, so the commands above keep all 161 capsules (`--n_shape_ids_remove 0`). Each capsule puts one
+semi-capsule in each group, so capsule library size cannot separate the groups the way it does in the
+UMI arms. Its other defaults, `p_min 0.1 / p_max 0.5 / p_steps 10`, match the published panels, whose
+PR curves are drawn at p = 0.100, 0.322 and 0.500.
+
+`spot_split` keeps the 2 µm matrix sparse. It used to densify it — 546K spots x 18K genes, ~40 GB as
+float32 — and copy it into shared memory, which only a server could hold; the sums per semi-capsule
+are the same numbers from the same random draws. Its per-replicate seeds now come from `--seed`
+(default 0) instead of an unseeded RNG, and a re-run is byte-identical.
 
 **Full-depth check, 2026-09-24.** Before any subsampling, splitting all 161 capsules by whether
 total UMI exceeds the median library size reproduces the manuscript's negative-control counts:
@@ -325,9 +357,15 @@ Results belong in `output/`, which is gitignored: `output/clustering/`, `output/
 **Figures, tables and checksums are not committed** — `.gitignore` excludes `*.pdf`, `*.csv`, `*.tex`
 and `*.sha256`; files that were already tracked stay tracked.
 
+**Every gene-wise test is corrected with Benjamini-Hochberg**, scanpy's default, for every method, and
+each call site says so explicitly rather than inheriting a default. Until 2026-09-24 LN was corrected
+with Bonferroni and its baselines with BH; on 2026-09-24 every method moved to Bonferroni, and on
+2026-09-25 every method moved to BH, along with `lntest`'s own default. The one BH that is not
+gene-wise, across gene sets in `lymphnode/gsea_utils.py`, was BH throughout.
+
 **Every output is byte-reproducible except wall-clock timings.** Regenerated twice from scratch on
-2026-09-24, under Bonferroni for every gene-wise test and LN's trigamma as psi_1(a) = 1/a, and checked
-file by file. Three things make that hold, and each is easy to undo by accident:
+2026-09-24 and checked file by file, with LN's trigamma as psi_1(a) = 1/a. Three things make that
+hold, and each is easy to undo by accident:
 
 - PDFs carry a timestamp unless pinned. `paths.py` sets `SOURCE_DATE_EPOCH` for matplotlib; the R
   scripts rewrite the date after `ggsave`, because R's PDF device ignores that variable.
@@ -345,15 +383,17 @@ June 2026 manifests, which pin the run behind the published PBMC3k and CITE-seq 
 |---|---|
 | `output/reference/clustering/` | 68 metric CSVs, 22 figures |
 | `output/reference/citeseq/` | metrics, per-gene results, LaTeX table, 102 figures |
+| `output/reference/kidney/` | the spot-split results CSVs, PR-curve JSON and six figures; the UMI arms are not yet run |
 | `output/reference/lymphnode/` | 28 figures (the CSVs carry wall-clock columns, so compare them by value) |
-| `output/reference/synthetic_nb/` | the two variance sweeps and three dispersion boxplots |
+| `output/reference/synthetic_nb/` | the two variance sweeps (`null --grid dispersion`) and three dispersion boxplots |
 | `output/reference/theory/` | two figures, two CSVs |
 
 `reference/unattributed/` holds two `.npy` files no script reads. Read `PROVENANCE.md` before assuming anything about them.
 
 The regenerated manuscript panels are staged under `output/manuscript_figures/`, with Overleaf paths
 and a README of what each one is. Reaching the paper is a manual upload.
-The BH-era outputs they replace are kept in `output/archive/`.
+Earlier outputs are kept in `output/archive/`: `june_bh` and `bh_2026-09-24` (Bonferroni LN against BH
+baselines) and `bonferroni_2026-09-25` (Bonferroni for every method).
 
 **Re-running an arm can overwrite committed files.** Nine tracked files live under `*/results/` rather than `output/`:
 
@@ -395,5 +435,5 @@ It exists because the arms were migrated onto `lntest` one at a time and somethi
   rejections / FPR 0.00304; running it gives 21 / 0.00638. The notebook was last executed 2024-11-06 and
   the estimator changed nineteen times after that, so its outputs are stale rather than wrong — 21 is what
   the frozen RECOMB-era estimator gives. See question 9 of the vault's math-questions handoff.
-- **Neither spatial arm has been run end to end here.** The paths are consistent and the inputs are public, but nobody has spent the 11 GB.
+- **The kidney UMI-downsampling sweeps have not been run end to end here.** Both spatial arms' inputs are built, and the lymph node arm and the kidney spot-split panels have run (2026-09-24, 2026-09-25); `umi_null` and `umi_de` at 10,000 replicates have not.
 - **The trigamma question is settled.** `lntest` has one trigamma difference, `trigamma_diff(a, n) = 1/a - 1/n`, and no flag to select another. That is the form the paper defines — `psi_1(z) = 1/z`, at `nature_submission/sections/methods.tex:79-83` — and the form every published result came from. Nothing in this tree asks for a trigamma any more, because there is nothing to ask for.

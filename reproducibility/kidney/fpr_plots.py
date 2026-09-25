@@ -14,7 +14,8 @@ plt.rcParams['mathtext.fontset'] = 'cm'  # Computer Modern style
 plt.rcParams['font.family'] = 'serif'
 
 
-def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None):
+def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None,
+                     p_label='Sampling probability'):
     """
     Plot log10(FPR) vs p from CSV results file.
     
@@ -28,6 +29,8 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None)
         Aspect ratio for the plot (default: 1.0)
     title_suffix : str, optional
         Text to append to the plot title (default: None)
+    p_label : str
+        What p is: 'Sampling probability' for UMI downsampling, 'Split probability' for spot splitting
     """
     # Read the CSV file
     df = pd.read_csv(require_input(
@@ -39,6 +42,7 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None)
     # Map method names to LaTeX-friendly names
     method_mapping = {
         'DELN': r"LN's $t$-test",
+        'LN_test': r"LN's $t$-test",
         'Scanpy t-test': r'$t$-test',
         'Scanpy wilcoxon': 'Wilcoxon'
     }
@@ -92,11 +96,11 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None)
                    color=method_colors[method], linewidth=2, markersize=6)
     
     # Prepare title text
-    title = r'FPR vs Sampling probability'
+    title = f'FPR vs {p_label}'
     if title_suffix:
         title = f'{title} {title_suffix}'
     
-    ax.set_xlabel(r'Sampling probability $p$', fontsize=18)
+    ax.set_xlabel(f'{p_label} $p$', fontsize=18)
     ax.set_ylabel(r'$\log_{10}(\mathrm{FPR})$', fontsize=18)
     ax.set_title(title, fontsize=16, fontweight='bold')
     ax.grid(True, alpha=0.3)
@@ -120,12 +124,15 @@ if __name__ == '__main__':
                         help='Aspect ratio for the plot (default: 1.0)')
     parser.add_argument('--title_suffix', type=str, default=None,
                         help='Text to append to the plot title (default: None)')
+    parser.add_argument('--p_label', type=str, default='Sampling probability',
+                        help="Name for p in the title and x-axis; 'Split probability' for spot_split (default: Sampling probability)")
     args = parser.parse_args()
     
     if not os.path.exists(args.csv_file):
         raise FileNotFoundError(f"CSV file not found: {args.csv_file}")
     
     print(f"Reading results from {args.csv_file}...")
-    plot_fpr_results(args.csv_file, args.output, args.aspect_ratio, title_suffix=args.title_suffix)
+    plot_fpr_results(args.csv_file, args.output, args.aspect_ratio, title_suffix=args.title_suffix,
+                     p_label=args.p_label)
     print("Done!")
 

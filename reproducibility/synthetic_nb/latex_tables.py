@@ -4,11 +4,9 @@ from paths import fig_name, require_input, results_dir
 import matplotlib.pyplot as plt
 
 df = pd.read_csv(require_input(
-    results_dir(__file__, create=False) / "nde_mu10_be" / "d1_vs_d2_01_nde_mu_10.csv",
-    what="arm B's per-replicate metrics, batch-effect variant (non_de_mu=10)",
-    source="run `python -m synthetic_nb.de_test` from reproducibility/ first. "
-           "Note the only committed CSV is the NO-batch variant, at "
-           "reference/synthetic_nb/de_metrics_mu10_nobatch.csv",
+    results_dir(__file__, create=False) / "nde_mu10" / "d1_vs_d2_01_nde_mu_10.csv",
+    what="arm B's per-replicate metrics, sparse setting (non_de_mu=10)",
+    source="run `python -m synthetic_nb.de_test` from reproducibility/ first",
 ))
 # df2 = pd.read_csv("./simul/test/NB_test_results/nde_mu100_be/results.csv")
 
@@ -48,7 +46,7 @@ for dispersion in sorted(set(df.dispersion)):
                                                  by='method', rot=90, fontsize=35,
                                                  layout=(1, len(metrics)), figsize=(40, 30), boxprops=boxprops,
                                                  whiskerprops=whiskerprops)
-    plt.suptitle('$(\phi_{Y_j}, \phi_{X_j}) =$' + f' (0.1, {dispersion})', fontsize=35)
+    plt.suptitle('$(\phi_{Y_j}, \phi_{X_j}) =$' + f' (1.0, {dispersion})', fontsize=35)
     for i, a in enumerate(ax):
         a.set_title(mnames[i], fontsize=40)
         a.set_xlabel('')

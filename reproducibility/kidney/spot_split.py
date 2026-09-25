@@ -5,7 +5,7 @@ import statsmodels.stats.multitest as smm
 import scanpy as sc
 import scipy.sparse as sp
 import argparse
-from multiprocessing import Pool, cpu_count, shared_memory
+from multiprocessing import Pool, cpu_count
 from functools import partial
 import matplotlib.pyplot as plt
 from collections import defaultdict
@@ -45,7 +45,7 @@ def fpr_test_single(X, Y):
             method_key = "Scanpy " + method
         if method == "DELN":
             lfcs, DELN_p_vals = get_DELN_lfcs(Y, X, test='t')
-            adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='bonferroni')[1]
+            adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='fdr_bh')[1]
             if np.sum(adj_pvals >= 0.05) == n_genes:
                 results[method_key] = {"fpr": 0., "fpr_filtered": 0.}
             else:
@@ -101,7 +101,7 @@ def de_test_single(X, Y, selected_genes, true_signs):
             method_key = "Scanpy " + method
         if method == "DELN":
             lfcs, DELN_p_vals = get_DELN_lfcs(Y, X, test='t')
-            adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='bonferroni')[1]
+            adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='fdr_bh')[1]
         else:
             lfcs, adj_pvals = scanpy_sig_test(X, Y, method=method)
             # Convert pandas Series to numpy arrays if needed
@@ -286,23 +286,29 @@ def de_test_single(X, Y, selected_genes, true_signs):
     return results
 
 
-def create_groups_from_shape_ids_shared(umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, p, seed=None):
+# The per-spot count matrix, kept sparse: dense it is ~40 GB for 546K spots x 18K genes.
+# Each worker receives it once, through the Pool initializer.
+_UMIS = None
+
+
+def _init_worker(umis):
+    global _UMIS
+    _UMIS = umis
+
+
+def create_groups_from_shape_ids(umis, shape_id_to_indices, unique_shape_ids, p, seed=None):
     """
-    Split spots within each shape_id into two groups A and B using shared memory.
-    
+    Split spots within each shape_id into two groups A and B.
+
     For each shape_id:
     1. Sample n_A from Binomial(n_spots, p)
     2. Randomly select n_A spots for group A, rest for group B
     3. Sum reads for each group to create two cells
-    
+
     Parameters:
     -----------
-    umis_shm_name : str
-        Name of shared memory block for umis array
-    umis_shape : tuple
-        Shape of umis array (n_spots, n_genes)
-    umis_dtype : numpy.dtype
-        Data type of umis array
+    umis : scipy.sparse.csr_matrix
+        Counts, (n_spots, n_genes)
     shape_id_to_indices : dict
         Pre-computed mapping from shape_id to array of spot indices
     unique_shape_ids : array
@@ -321,16 +327,12 @@ def create_groups_from_shape_ids_shared(umis_shm_name, umis_shape, umis_dtype, s
     """
     if seed is not None:
         np.random.seed(seed)
-    
-    # Attach to shared memory
-    existing_shm = shared_memory.SharedMemory(name=umis_shm_name)
-    umis = np.ndarray(umis_shape, dtype=umis_dtype, buffer=existing_shm.buf)
-    
+
     n_shape_ids = len(unique_shape_ids)
     n_genes = umis.shape[1]
-    
-    X = np.zeros((n_shape_ids, n_genes), dtype=umis_dtype)
-    Y = np.zeros((n_shape_ids, n_genes), dtype=umis_dtype)
+
+    X = np.zeros((n_shape_ids, n_genes), dtype=umis.dtype)
+    Y = np.zeros((n_shape_ids, n_genes), dtype=umis.dtype)
     
     for idx, shape_id in enumerate(unique_shape_ids):
         # Get pre-computed spot indices for this shape_id
@@ -352,21 +354,18 @@ def create_groups_from_shape_ids_shared(umis_shm_name, umis_shape, umis_dtype, s
         group_B_indices = shuffled_indices[n_A:]
         
         # Sum reads for each group
-        X[idx, :] = umis[group_A_indices, :].sum(axis=0)
-        Y[idx, :] = umis[group_B_indices, :].sum(axis=0)
-    
-    # Close shared memory connection (but don't unlink - main process handles that)
-    existing_shm.close()
-    
+        X[idx, :] = np.asarray(umis[group_A_indices, :].sum(axis=0)).ravel()
+        Y[idx, :] = np.asarray(umis[group_B_indices, :].sum(axis=0)).ravel()
+
     return X, Y
 
 
 def run_single_iteration_fpr(args):
     """Run a single iteration of the FPR test with given parameters."""
-    p, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, seed = args
-    
-    # Create groups from shape_ids (uses shared memory, does splitting in worker)
-    X, Y = create_groups_from_shape_ids_shared(umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, p, seed=seed)
+    p, shape_id_to_indices, unique_shape_ids, seed = args
+
+    # Create groups from shape_ids (does splitting in worker)
+    X, Y = create_groups_from_shape_ids(_UMIS, shape_id_to_indices, unique_shape_ids, p, seed=seed)
     
     # Run the test
     return fpr_test_single(X, Y)
@@ -374,13 +373,13 @@ def run_single_iteration_fpr(args):
 
 def run_single_iteration_de(args):
     """Run a single iteration of the DE test with given parameters."""
-    p, q, lfc, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, seed = args
-    
+    p, q, lfc, shape_id_to_indices, unique_shape_ids, seed = args
+
     # Set random seed for reproducibility within each iteration
     np.random.seed(seed)
-    
-    # Create groups from shape_ids (uses shared memory, does splitting in worker)
-    X, Y = create_groups_from_shape_ids_shared(umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, p, seed=seed)
+
+    # Create groups from shape_ids (does splitting in worker)
+    X, Y = create_groups_from_shape_ids(_UMIS, shape_id_to_indices, unique_shape_ids, p, seed=seed)
     
     # Randomly select genes with probability q
     n_genes = X.shape[1]
@@ -426,14 +425,14 @@ def run_single_iteration_de(args):
     return de_test_single(X_modified, Y_modified, effective_selected_genes, effective_true_signs)
 
 
-def run_tests_for_p_fpr(p, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs):
+def run_tests_for_p_fpr(p, umis, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs):
     """Run n_reps iterations for a given p value in parallel (FPR mode)."""
     # Create arguments for each iteration - workers do the splitting
     seeds = np.random.randint(0, 2**31, size=n_reps)
-    args_list = [(p, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, seed) for seed in seeds]
-    
+    args_list = [(p, shape_id_to_indices, unique_shape_ids, seed) for seed in seeds]
+
     # Run in parallel
-    with Pool(processes=n_jobs) as pool:
+    with Pool(processes=n_jobs, initializer=_init_worker, initargs=(umis,)) as pool:
         results_list = pool.map(run_single_iteration_fpr, args_list)
     
     # Aggregate results
@@ -483,14 +482,14 @@ def run_tests_for_p_fpr(p, umis_shm_name, umis_shape, umis_dtype, shape_id_to_in
     return summary
 
 
-def run_tests_for_p_de(p, q, lfc, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs):
+def run_tests_for_p_de(p, q, lfc, umis, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs):
     """Run n_reps iterations for a given p value in parallel (DE test mode)."""
     # Create arguments for each iteration - workers do the splitting
     seeds = np.random.randint(0, 2**31, size=n_reps)
-    args_list = [(p, q, lfc, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, seed) for seed in seeds]
-    
+    args_list = [(p, q, lfc, shape_id_to_indices, unique_shape_ids, seed) for seed in seeds]
+
     # Run in parallel
-    with Pool(processes=n_jobs) as pool:
+    with Pool(processes=n_jobs, initializer=_init_worker, initargs=(umis,)) as pool:
         results_list = pool.map(run_single_iteration_de, args_list)
     
     # Aggregate results
@@ -900,6 +899,8 @@ if __name__ == '__main__':
                         help='Number of repetitions per p value (default: 100)')
     parser.add_argument('--n_jobs', type=int, default=None,
                         help='Number of parallel jobs (default: all available cores)')
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Seed for the per-repetition seeds (default: 0)')
     parser.add_argument('--output', type=str, default=fig_name('shape_split_test_plot'),
                         help='Output file for the plot (default: shape_split_test_plot.png)')
     parser.add_argument('--results_file', type=str, default=None,
@@ -962,20 +963,11 @@ if __name__ == '__main__':
     if 'gene_ids' in h5ad.var.columns:
         h5ad.var = h5ad.var.reset_index().set_index('gene_ids')
     
-    # Robustly convert to a dense numpy array
-    X_raw = h5ad.X
-    if sp.issparse(X_raw):
-        umis_w_zeros = X_raw.toarray()
-    else:
-        umis_w_zeros = np.asarray(X_raw)
-    
+    umis = sp.csr_matrix(h5ad.X)
+
     shape_ids = h5ad.obs['shape_id'].values
-    
+
     print(f"Preprocessing data...")
-    # preprocessing
-    # remove genes with zero counts across all spots
-    idx = umis_w_zeros.sum(0) > 0
-    umis = umis_w_zeros#[:, idx]
     n_genes = umis.shape[-1]
     n_spots = umis.shape[0]
     
@@ -1007,14 +999,7 @@ if __name__ == '__main__':
     n_shape_ids_after = len(np.unique(shape_ids_base))
     print(f"After removing {n_shape_ids_remove} shape_ids: {n_spots_after} spots, {n_shape_ids_after} shape_ids")
     print(f"Data shape: {umis_base.shape}")
-    
-    # Convert sparse to dense once for efficiency (if sparse)
-    # This avoids repeated sparse operations
-    if sp.issparse(umis_base):
-        print("Converting sparse matrix to dense for faster processing...")
-        umis_base = umis_base.toarray()
-        print("Conversion complete.")
-    
+
     # Pre-compute shape_id to indices mapping (once, used for all iterations)
     print("Pre-computing shape_id to indices mapping...")
     unique_shape_ids = np.unique(shape_ids_base)
@@ -1022,56 +1007,40 @@ if __name__ == '__main__':
     for shape_id in unique_shape_ids:
         shape_id_to_indices[shape_id] = np.where(shape_ids_base == shape_id)[0]
     print(f"Pre-computed mapping for {len(unique_shape_ids)} shape_ids")
-    
-    # Create shared memory for umis_base to avoid copying to each worker
-    # This is critical for large arrays (e.g., 600K spots × 18K genes)
-    print("Creating shared memory for umis_base to avoid copying to workers...")
-    umis_shape = umis_base.shape
-    umis_dtype = umis_base.dtype
-    shm = shared_memory.SharedMemory(create=True, size=umis_base.nbytes)
-    umis_shm = np.ndarray(umis_shape, dtype=umis_dtype, buffer=shm.buf)
-    umis_shm[:] = umis_base[:]  # Copy data into shared memory
-    umis_shm_name = shm.name
-    print(f"Shared memory created: {shm.name}, size: {umis_base.nbytes / 1e9:.2f} GB")
-    
+
     print(f"Running tests for {p_steps} p values, {n_reps} repetitions each, using {n_jobs} cores...")
     print("Note: Splitting is done in parallel in worker processes, testing is also parallelized.")
     
     # Generate p values
     p_values = np.linspace(p_min, p_max, p_steps)
-    
+
+    np.random.seed(args.seed)
+
     # Run tests for each p value
     results_by_p = {}
-    try:
-        for i, p in enumerate(p_values):
-            print(f"Processing p={p:.3f} ({i+1}/{p_steps})...")
-            if q == 0:
-                results_by_p[p] = run_tests_for_p_fpr(p, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs)
-                # Print summary for this p
-                for method, metrics in results_by_p[p].items():
-                    print(f"  {method}: FPR={metrics['fpr_mean']:.4f}±{metrics['fpr_std']:.4f}, "
-                          f"FPR Filtered={metrics['fpr_filtered_mean']:.4f}±{metrics['fpr_filtered_std']:.4f}")
-            else:
-                results_by_p[p] = run_tests_for_p_de(p, q, lfc, umis_shm_name, umis_shape, umis_dtype, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs)
-                # Print summary for this p
-                for method, metrics in results_by_p[p].items():
-                    print(f"  {method}: "
-                          f"AP={metrics.get('ap_mean', np.nan):.4f}±{metrics.get('ap_std', np.nan):.4f}, "
-                          f"PR-AUC={metrics.get('pr_auc_mean', np.nan):.4f}±{metrics.get('pr_auc_std', np.nan):.4f}, "
-                          f"PR-AUC-Curve={metrics.get('pr_auc_curve_mean', np.nan):.4f}±{metrics.get('pr_auc_curve_std', np.nan):.4f}, "
-                          f"Accuracy={metrics.get('accuracy_mean', np.nan):.4f}±{metrics.get('accuracy_std', np.nan):.4f}, "
-                          f"Precision={metrics.get('precision_mean', np.nan):.4f}±{metrics.get('precision_std', np.nan):.4f}, "
-                          f"TPR={metrics['tpr_mean']:.4f}±{metrics['tpr_std']:.4f}, "
-                          f"FPR={metrics['fpr_mean']:.4f}±{metrics['fpr_std']:.4f}, "
-                          f"FNR={metrics['fnr_mean']:.4f}±{metrics['fnr_std']:.4f}, "
-                          f"TNR={metrics['tnr_mean']:.4f}±{metrics['tnr_std']:.4f}")
-    
-    finally:
-        # Clean up shared memory
-        print("Cleaning up shared memory...")
-        shm.close()
-        shm.unlink()  # Release the shared memory block
-    
+    for i, p in enumerate(p_values):
+        print(f"Processing p={p:.3f} ({i+1}/{p_steps})...")
+        if q == 0:
+            results_by_p[p] = run_tests_for_p_fpr(p, umis_base, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs)
+            # Print summary for this p
+            for method, metrics in results_by_p[p].items():
+                print(f"  {method}: FPR={metrics['fpr_mean']:.4f}±{metrics['fpr_std']:.4f}, "
+                      f"FPR Filtered={metrics['fpr_filtered_mean']:.4f}±{metrics['fpr_filtered_std']:.4f}")
+        else:
+            results_by_p[p] = run_tests_for_p_de(p, q, lfc, umis_base, shape_id_to_indices, unique_shape_ids, n_reps, n_jobs)
+            # Print summary for this p
+            for method, metrics in results_by_p[p].items():
+                print(f"  {method}: "
+                      f"AP={metrics.get('ap_mean', np.nan):.4f}±{metrics.get('ap_std', np.nan):.4f}, "
+                      f"PR-AUC={metrics.get('pr_auc_mean', np.nan):.4f}±{metrics.get('pr_auc_std', np.nan):.4f}, "
+                      f"PR-AUC-Curve={metrics.get('pr_auc_curve_mean', np.nan):.4f}±{metrics.get('pr_auc_curve_std', np.nan):.4f}, "
+                      f"Accuracy={metrics.get('accuracy_mean', np.nan):.4f}±{metrics.get('accuracy_std', np.nan):.4f}, "
+                      f"Precision={metrics.get('precision_mean', np.nan):.4f}±{metrics.get('precision_std', np.nan):.4f}, "
+                      f"TPR={metrics['tpr_mean']:.4f}±{metrics['tpr_std']:.4f}, "
+                      f"FPR={metrics['fpr_mean']:.4f}±{metrics['fpr_std']:.4f}, "
+                      f"FNR={metrics['fnr_mean']:.4f}±{metrics['fnr_std']:.4f}, "
+                      f"TNR={metrics['tnr_mean']:.4f}±{metrics['tnr_std']:.4f}")
+
     print(f"\nSaving results...")
     if q == 0:
         save_results_fpr(p_values, results_by_p, results_file)

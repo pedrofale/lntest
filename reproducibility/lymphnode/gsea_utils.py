@@ -10,7 +10,7 @@ import pandas as pd
 from lntest import get_LN_lfcs as get_DELN_lfcs
 
 
-def scanpy_sig_test_with_scores(X, Y, method='t-test', normalization='CP10K', corr_method="bonferroni"):
+def scanpy_sig_test_with_scores(X, Y, method='t-test', normalization='CP10K', corr_method="benjamini-hochberg"):
     """
     Run scanpy DE test and return log fold changes, test statistics (scores), p-values, and adjusted p-values.
     
@@ -128,7 +128,7 @@ def de_test_with_scores(X, Y, gene_names=None):
         - 'lfc': array of log fold changes
         - 'test_statistic': array of test statistics (signed, for GSEA ranking)
         - 'p_vals': array of unadjusted p-values
-        - 'adj_pvals': array of adjusted p-values (Bonferroni for DELN, method-specific for scanpy)
+        - 'adj_pvals': array of adjusted p-values (Benjamini-Hochberg for DELN, method-specific for scanpy)
         - 'gene_names': array of gene names after filtering (if gene_names provided)
         - 'gene_mask': boolean mask indicating which original genes were kept
     """
@@ -164,8 +164,7 @@ def de_test_with_scores(X, Y, gene_names=None):
             lfcs, p_vals, test_statistics, log_abs_statistic = get_DELN_lfcs(
                 Y, X, test='t', return_log_abs_statistic=True
             )
-            # Apply Bonferroni correction
-            adj_pvals = smm.multipletests(p_vals, alpha=0.05, method='bonferroni')[1]
+            adj_pvals = smm.multipletests(p_vals, alpha=0.05, method='fdr_bh')[1]
             
             # Store log_abs_statistic for GSEA ranking
             # For now, we'll use test_statistics as before, but store log_abs_statistic separately

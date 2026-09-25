@@ -8,7 +8,7 @@ from lntest import get_LN_lfcs
 import matplotlib.pyplot as plt
 
 
-def scanpy_sig_test(X, Y, method='t-test', normalization='CP10K', corr_method="bonferroni"):
+def scanpy_sig_test(X, Y, method='t-test', normalization='CP10K', corr_method="benjamini-hochberg"):
     nx = X.shape[0]
     ny = Y.shape[0]
     n_genes = Y.shape[1]
@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
 
     DELN_lfcs, DELN_p_vals = get_LN_lfcs(Y, X, test='t', normalize=True, normalization='CP10K')
-    DELN_adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='bonferroni')[1]
+    DELN_adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='fdr_bh')[1]
     _, ax = plt.subplots(1, 2, figsize=(20, 10))
     ax[0].scatter(DELN_lfcs, -np.log10(DELN_adj_pvals), label=r'$S_\text{LN}$')
     # ax[0].scatter(true_lfcs, -np.log10(DELN_adj_pvals), label='True LFC vs DELN adj $p$')

@@ -8,16 +8,13 @@ quietly get an off-palette colour.
 
 from matplotlib.patheffects import withStroke
 
-LN = '#082f21'            # dark green, close to black: black overlays vanish on it
+LN = '#2ca02c'            # tab10 green
 LOG1P = '#8c564b'         # tab10 brown
 WILCOXON = '#17becf'      # tab10 cyan
-MAST = '#ff7f0e'          # tab10 orange
+MAST = '#9467bd'          # tab10 purple: tab10 orange is indistinguishable from the green under protanopia
 LOG1P_ACTUAL = '#c49c94'  # tab20 light brown: the t-test's LFC recomputed on the log1p scale
 
-# One hue, light to dark, for an ordered variable within the log1p t-test's series.
-LOG1P_RAMP = ['#c49c94', '#a8776b', LOG1P, '#5e3a32']
-
-# Box-plot medians that read on every fill, from LN's near-black to the light brown.
+# Box-plot medians that read on every fill, dark or light.
 MEDIANPROPS = {'color': 'white', 'linewidth': 1.5,
                'path_effects': [withStroke(linewidth=3, foreground='black')]}
 

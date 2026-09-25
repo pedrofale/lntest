@@ -12,7 +12,7 @@ from matplotlib.lines import Line2D
 
 def get_method_display_name(method):
     """Convert method name to display name with LaTeX formatting."""
-    if method == "DELN":
+    if method in ("DELN", "LN_test"):
         return "LN's-$t$-test"
     elif method == "Scanpy t-test":
         return "$t$-test"

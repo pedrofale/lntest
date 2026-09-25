@@ -59,7 +59,7 @@ def run_ln_de(
     groups=None,
     reference="rest",
     sparse=True,
-    corr_method="bonferroni",
+    corr_method="benjamini-hochberg",
     **kwargs,
 ):
     """
@@ -87,7 +87,7 @@ def run_ttest_de(
     use_raw=False,
     groups=None,
     reference="rest",
-    corr_method="bonferroni",
+    corr_method="benjamini-hochberg",
     **kwargs,
 ):
     """Run Scanpy t-test on layer (default log1p_norm)."""
@@ -114,7 +114,7 @@ def run_wilcoxon_de(
     use_raw=False,
     groups=None,
     reference="rest",
-    corr_method="bonferroni",
+    corr_method="benjamini-hochberg",
     **kwargs,
 ):
     """Run Scanpy wilcoxon on layer (default log1p_norm)."""
@@ -208,7 +208,7 @@ def run_mast_de(
             by = "primerid"
         )
         colnames(fcHurdle) <- c("names", "pvals", "logfoldchanges")
-        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "bonferroni")
+        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "BH")
         fcHurdle$scores <- -log10(fcHurdle$pvals + 1e-300) * sign(fcHurdle$logfoldchanges)
         mast_result <- fcHurdle
         rm(sca, zlmCond, summaryCond, summaryDt, fcHurdle)
@@ -283,7 +283,7 @@ def run_mast_de(
             by = "primerid"
         )
         colnames(fcHurdle) <- c("names", "pvals", "logfoldchanges")
-        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "bonferroni")
+        fcHurdle$pvals_adj <- p.adjust(fcHurdle$pvals, method = "BH")
         fcHurdle$scores <- -log10(fcHurdle$pvals + 1e-300) * sign(fcHurdle$logfoldchanges)
         mast_result <- fcHurdle
         rm(sca, zlmCond, summaryCond, summaryDt, fcHurdle)

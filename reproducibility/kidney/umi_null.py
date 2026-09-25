@@ -43,7 +43,7 @@ def fpr_test_single(X, Y):
             method_key = "Scanpy " + method
         if method == "DELN":
             lfcs, DELN_p_vals = get_DELN_lfcs(Y, X, test='t')
-            adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='bonferroni')[1]
+            adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='fdr_bh')[1]
             if np.sum(adj_pvals >= 0.05) == n_genes:
                 results[method_key] = {"fpr": 0., "fpr_filtered": 0.}
             else:
@@ -227,6 +227,8 @@ if __name__ == '__main__':
                         help='Number of repetitions per p value (default: 100)')
     parser.add_argument('--n_jobs', type=int, default=None,
                         help='Number of parallel jobs (default: all available cores)')
+    parser.add_argument('--seed', type=int, default=0,
+                        help='Seed for the per-repetition seeds (default: 0)')
     parser.add_argument('--output', type=str, default=fig_name('fdr_plot'),
                         help='Output file for the plot (default: fdr_plot.png)')
     parser.add_argument('--results_file', type=str, default=None,
@@ -293,6 +295,8 @@ if __name__ == '__main__':
     
     # Generate p values
     p_values = np.linspace(p_min, p_max, p_steps)
+    
+    np.random.seed(args.seed)
     
     # Run tests for each p value
     results_by_p = {}
