@@ -45,6 +45,16 @@ sources:
     extract_to: kidney/data
     arms: [kidney]
 
+  - name: kidney-he-fullres
+    what: >-
+      Visium HD Human Kidney FFPE, the full-resolution H&E (0.27 um per pixel), only for the
+      close-ups in kidney/capsule_figure.py
+    url: https://cf.10xgenomics.com/samples/spatial-exp/3.1.2/Visium_HD_Human_Kidney_FFPE/Visium_HD_Human_Kidney_FFPE_tissue_image.tif
+    dest: kidney/data/Visium_HD_Human_Kidney_FFPE_tissue_image.tif
+    sha256: 7c5ecbe041ccaee18172ce42964b07f1bd30f533849ceeb300f38291ceb00ff5
+    bytes: 4328630264
+    arms: [kidney]
+
   - name: lymphnode-segmented
     what: Visium HD Human Lymph Node FFPE, segmented_outputs (cell segmentations)
     url: https://cf.10xgenomics.com/samples/spatial-exp/4.0.1/Visium_HD_Human_Lymph_Node_FFPE/Visium_HD_Human_Lymph_Node_FFPE_segmented_outputs.tar.gz
