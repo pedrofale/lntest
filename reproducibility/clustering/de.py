@@ -7,7 +7,7 @@ Scanpy's t-test (and wilcoxon) across multiple clustering resolutions, saving al
 DE results to the updated AnnData file.
 
 Usage:
-    python run_multiresolution_de.py --config config.yaml [--output-dir output/]
+    python run_multiresolution_de.py --config config.yaml [--output-dir clustering/results/]
 """
 
 import argparse
@@ -21,7 +21,7 @@ import anndata as ad
 import scipy.sparse as sp
 import pandas as pd
 
-from paths import require_input
+from paths import require_input, results_dir
 
 # pandas >= 3.0 defaults to Arrow-backed string dtype, which anndata cannot
 # serialize to h5ad. Disable it before any data is read so all string indices
@@ -291,8 +291,8 @@ def main():
     parser.add_argument(
         '--output-dir',
         type=str,
-        default='output',
-        help='Directory to save output files (default: output)'
+        default=str(results_dir(__file__)),
+        help='Directory to save output files (default: clustering/results)'
     )
     parser.add_argument(
         '--skip-mast',

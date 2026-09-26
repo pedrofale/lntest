@@ -1,40 +1,21 @@
 rm(list=ls())
 library(data.table)
-library(ggplot2)
-library(glue)
 library(Seurat)
 library(tidyverse)
 library(xtable)
 
 # Paths are relative to this script's directory (citeseq/R/), which is what
 # ZILN.Rproj sets as the R working directory. The arm's committed input lives in
-# citeseq/data/; everything this chain produces goes to output/citeseq/, which
-# is gitignored. citeseq/results/ keeps the committed June outputs.
+# citeseq/data/; everything this chain produces goes to citeseq/results/.
 data_dir <- "../data/"
-results_dir <- "../../output/citeseq/"
-# Figures are PDF, matching reproducibility/paths.py on the Python side.
-# LNTEST_FIG_FORMAT overrides the extension for a run.
-fig_ext <- Sys.getenv("LNTEST_FIG_FORMAT", "pdf")
-fig_name <- function(stem) paste0(sub("\\.(png|pdf|eps|svg|jpe?g|tiff?)$", "", stem, ignore.case = TRUE), ".", fig_ext)
-
-# ggsave, but with the PDF timestamp pinned so repeated runs are byte-identical.
-# R's pdf device ignores SOURCE_DATE_EPOCH; the replacement keeps byte offsets.
-ggsave <- function(filename, ...) {
-  ggplot2::ggsave(filename, ...)
-  if (grepl("\\.pdf$", filename)) {
-    x <- readBin(filename, "raw", file.info(filename)$size)
-    for (key in c("CreationDate", "ModDate")) {
-      for (at in grepRaw(paste0("/", key, " \\(D:[0-9]{14}"), x, all = TRUE)) {
-        start <- at + nchar(key) + 5
-        x[start:(start + 13)] <- charToRaw("19700101000000")
-      }
-    }
-    writeBin(x, filename)
-  }
-  invisible(filename)
-}
+results_dir <- "../results/"
+# No figures are drawn in R: citeseq/plots.py draws them from the CSVs this chain writes.
 
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Method names and order shared with the Python figures (reproducibility/method_colors.py).
+method_names <- c("LN" = "LN's t-test", "t-test" = "log1p t-test", "Wilcoxon" = "Wilcoxon")
+method_levels <- c("LN's t-test", "log1p t-test", "Wilcoxon")
 
 
 results <- fread(paste0(results_dir, "CITE_seq_results.csv"))
@@ -60,7 +41,7 @@ xt <- results_tbl %>%
   #mutate(cell = sprintf("%.3f ± %.3f", mean, se)) %>%
   mutate(
     Metric = factor(Metric, metric_order),
-    Method = factor(Method, c("LN", "t-test", "Wilcoxon")),
+    Method = factor(method_names[Method], method_levels),
     cell = sprintf("%.3f", mean)) %>%
   select(Method, Metric, cell) %>%
   pivot_wider(names_from = Method, values_from = cell) %>%
@@ -70,81 +51,3 @@ print(xt, include.rownames = FALSE, type="latex", file = paste0(results_dir, "CI
 
 results[is_signal_gene == TRUE,.(mean((ln_lfc - true_lfc)^2),
                                  mean((scanpy_lfc - true_lfc)^2))] 
-results_long <- results[is_signal_gene == TRUE] %>% 
-  select(ln_lfc, scanpy_lfc, true_lfc) %>% 
-  pivot_longer(cols = c("ln_lfc", "scanpy_lfc"), names_to = "Method", values_to = "LFC") %>% 
-  mutate(Method = recode(Method, 
-                         "ln_lfc" = "LN's test", 
-                         "scanpy_lfc" = "Scanpy"))
-
-pl <- results_long %>% 
-  ggplot(aes(x = true_lfc, y = LFC)) +
-  geom_point(alpha=0.5, size=0.5) + 
-  geom_abline(slope=1, intercept=0, color="red", linetype="dashed") +
-  theme_bw() +
-  xlab("True LFC") +
-  ylab("Estimated LFC") +
-  facet_grid(~ Method) 
-pl
-ggsave(fig_name(paste0(results_dir, "CITE_seq_lfc_plot.png")), pl)
-
-pl <- results_long %>% 
-  ggplot(aes(x = true_lfc, y = true_lfc - LFC)) +
-  geom_point(alpha=0.5, size=0.5) + 
-  geom_abline(slope=0, intercept=0, color="red", linetype="dashed") +
-  theme_bw() +
-  xlab("True LFC") +
-  ylab("Bias") +
-  facet_grid(~ Method) 
-pl
-ggsave(fig_name(paste0(results_dir, "CITE_seq_lfc_error_plot.png")), pl)
-
-# Load Seurat results
-seurat_lfc_results <- readRDS(paste0(results_dir, "seurat_lfc_results.rds"))
-seurat_lfc_results %>% 
-  filter(true_lfcs != 0) %>% 
-  ggplot(aes(true_lfcs, seurat_lfc)) + 
-  geom_point() +
-  geom_abline(slope=1, intercept=0, color="red", linetype="dashed")
-
-# Merge `results` with `seurat_lfc_results`
-# Rename V1
-seurat_results_dt <- seurat_lfc_results %>% 
-  select(gene_names, seurat_lfc, rep)
-dim(seurat_results_dt)
-results_dt <- results %>% 
-  mutate(gene_names = V1, rep = replicate) %>% 
-  select(gene_names, ln_lfc, scanpy_lfc, true_lfc, rep)
-dim(results_dt)
-
-# Join the two tables by gene_names and rep.
-merged_results <- inner_join(results_dt, seurat_results_dt, by = c("gene_names", "rep"))
-
-merged_results_long <- merged_results[true_lfc != 0] %>% 
-  select(ln_lfc, scanpy_lfc, seurat_lfc, true_lfc) %>% 
-  pivot_longer(cols = c("ln_lfc", "scanpy_lfc", "seurat_lfc"), names_to = "Method", values_to = "LFC") %>% 
-  mutate(Method = recode(Method, 
-                         "ln_lfc" = "LN's test", 
-                         "scanpy_lfc" = "Scanpy",
-                         "seurat_lfc" = "Seurat"))
-pl <- merged_results_long %>% 
-  ggplot(aes(x = true_lfc, y = LFC)) +
-  geom_point(alpha=0.5) + 
-  geom_abline(slope=1, intercept=0, color="red", linetype="dashed") +
-  theme_bw() +
-  xlab("True LFC") +
-  ylab("Estimated LFC") +
-  facet_grid(~ Method) 
-ggsave(fig_name(glue("{results_dir}CITE_seq_lfc_plot_all_methods.png")), pl)
-
-pl <- merged_results_long %>% 
-  ggplot(aes(x = true_lfc, y = true_lfc - LFC)) +
-  geom_point(alpha=0.5) + 
-  geom_abline(slope=0, intercept=0, color="red", linetype="dashed") +
-  theme_bw() +
-  xlab("True LFC") +
-  ylab("Bias") +
-  facet_grid(~ Method) 
-pl
-ggsave(fig_name(paste0(results_dir, "CITE_seq_lfc_error_plot_all.png")), pl)
-

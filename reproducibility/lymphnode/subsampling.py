@@ -13,7 +13,7 @@ Input adata.X = raw counts (spot-level); after subsampling we aggregate to
 cell-level counts and run the same analysis as the celltype pipeline.
 
 Usage:
-    python run_subsampling_analysis_parallel.py --config config.yaml [--output-dir output/] [--n-workers 8]
+    python run_subsampling_analysis_parallel.py --config config.yaml [--output-dir lymphnode/results/] [--n-workers 8]
 
 Optional in config (defaults used if omitted):
   - min_cells_per_gene (int): genes must be expressed in at least that many cells in
@@ -54,8 +54,9 @@ except ImportError:
 
 import numpy as np
 
-from paths import fig_name, require_input
-from method_colors import MEDIANPROPS, method_color
+from paths import fig_name, require_input, results_dir
+import plot_style
+from method_colors import MEDIANPROPS, method_color, method_draw_order, method_label, method_order
 import pandas as pd
 import scanpy as sc
 import seaborn as sns
@@ -109,11 +110,13 @@ def _plot_box_pandas(df, x_col, y_col, hue_col, ax=None):
     if ax is None:
         ax = plt.gca()
     x_vals = sorted(df[x_col].dropna().unique(), key=str)
-    hue_vals = sorted(df[hue_col].dropna().unique(), key=str)
+    hue_vals = method_order(df[hue_col].dropna())
     n_hue = len(hue_vals)
     width = 0.7 / max(n_hue, 1)
+    rng = np.random.default_rng(0)
     for xi, x in enumerate(x_vals):
-        for hi, h in enumerate(hue_vals):
+        for h in method_draw_order(hue_vals):
+            hi = hue_vals.index(h)
             vals = df.loc[(df[x_col] == x) & (df[hue_col] == h), y_col].dropna()
             if len(vals) == 0:
                 continue
@@ -124,12 +127,19 @@ def _plot_box_pandas(df, x_col, y_col, hue_col, ax=None):
             )
             for box in bp["boxes"]:
                 box.set_facecolor(method_color(h))
+                box.set_edgecolor("none")
+            plot_style.strip(ax, pos, vals.values, method_color(h), width, rng)
     ax.set_xticks(range(len(x_vals)))
     ax.set_xticklabels([str(x) for x in x_vals])
-    from matplotlib.patches import Patch
-    handles = [Patch(facecolor=method_color(h)) for h in hue_vals]
-    ax.legend(handles=handles, labels=hue_vals, title=hue_col)
     return ax
+
+
+def _method_legend(fig, df):
+    """One method key for the whole figure, right of its axes."""
+    from matplotlib.patches import Patch
+    methods = method_order(df["method"].dropna())
+    plot_style.legend_outside(fig, [Patch(facecolor=method_color(m)) for m in methods],
+                              [method_label(m) for m in methods])
 
 
 def load_config(config_path):
@@ -764,15 +774,168 @@ def process_task(task):
     return records, task_time
 
 
+def plot_results(df_results, top_genes, output_dir):
+    """Every figure, from the per-replicate results table."""
+    plot_style.use()
+    # Metrics to plot; each gets a combined plot and a per-cluster faceted plot
+    plot_metrics = [
+        ("jaccard_top", "jaccard_top_vs_subsampling.png"),
+        ("jaccard_all", "jaccard_all_vs_subsampling.png"),
+        ("auprc", "auprc_vs_subsampling.png"),
+    ]
+    if "gsea_nes" in df_results.columns:
+        plot_metrics.append(("gsea_nes", "gsea_nes_vs_subsampling.png"))
+    for y_col, fname in plot_metrics:
+        if y_col not in df_results.columns:
+            continue
+        # Combined (all clusters) - use pandas/matplotlib to avoid seaborn boxplot bugs
+        fig, ax = plt.subplots(figsize=(7.2, 2.6))
+        _plot_box_pandas(df_results, "fraction", y_col, "method", ax=ax)
+        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_ylabel(y_col)
+        plot_style.boxplot_grid(ax)
+        plt.tight_layout()
+        _method_legend(plt.gcf(), df_results)
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, fname)), dpi=300, bbox_inches="tight")
+        plt.close()
+        # Per-cluster: one panel per cluster
+        clusters = sorted(df_results["cluster"].unique())
+        fig, axes = plt.subplots(1, len(clusters), figsize=(3.6 * len(clusters), 2.6), sharey=True)
+        if len(clusters) == 1:
+            axes = [axes]
+        for ax, cl in zip(axes, clusters):
+            sub = df_results[df_results["cluster"] == cl]
+            _plot_box_pandas(sub, "fraction", y_col, "method", ax=ax)
+            ax.set_title(str(cl))
+            ax.set_xlabel("Sub-sampling fraction (p)")
+            plot_style.boxplot_grid(ax)
+        axes[0].set_ylabel(y_col)
+        plt.tight_layout()
+        _method_legend(plt.gcf(), df_results)
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, fname.replace(".png", "_by_cluster.png"))), dpi=300, bbox_inches="tight")
+        plt.close()
+    # Precision@k multi-panel (combined)
+    fig, axes = plt.subplots(2, 2, figsize=(7.2, 5.2))
+    for ax, k in zip(axes.flat, [10, 20, 50, 100]):
+        col = f"precision_at_{k}"
+        if col in df_results.columns:
+            _plot_box_pandas(df_results, "fraction", col, "method", ax=ax)
+            ax.set_ylabel(f"Precision@{k}")
+        ax.set_xlabel("Sub-sampling fraction (p)")
+        plot_style.boxplot_grid(ax)
+    plt.tight_layout()
+    _method_legend(plt.gcf(), df_results)
+    plot_style.rasterize_dense(plt.gcf())
+    plt.savefig(fig_name(os.path.join(output_dir, "precision_at_k_vs_subsampling.png")), dpi=300, bbox_inches="tight")
+    plt.close()
+    # Precision@k by cluster
+    for k in [10, 20, 50, 100]:
+        col = f"precision_at_{k}"
+        if col not in df_results.columns:
+            continue
+        clusters = sorted(df_results["cluster"].unique())
+        fig, axes = plt.subplots(1, len(clusters), figsize=(3.6 * len(clusters), 2.6), sharey=True)
+        if len(clusters) == 1:
+            axes = [axes]
+        for ax, cl in zip(axes, clusters):
+            sub = df_results[df_results["cluster"] == cl]
+            _plot_box_pandas(sub, "fraction", col, "method", ax=ax)
+            ax.set_title(str(cl))
+            ax.set_xlabel("Sub-sampling fraction (p)")
+            ax.set_ylabel(f"Precision@{k}")
+            plot_style.boxplot_grid(ax)
+        plt.tight_layout()
+        _method_legend(plt.gcf(), df_results)
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, f"precision_at_{k}_vs_subsampling_by_cluster.png")), dpi=300, bbox_inches="tight")
+        plt.close()
+    # AUPRC vs Jaccard scatter
+    plt.figure(figsize=(3.2, 2.8))
+    for method in method_draw_order(df_results["method"]):
+        subset = df_results[df_results["method"] == method]
+        plt.scatter(subset["jaccard_top"], subset["auprc"], alpha=0.3, label=method_label(method), s=4,
+                    color=method_color(method))
+    plt.xlabel(f"Jaccard (top {top_genes} genes)")
+    plt.ylabel("AUPRC")
+    plt.tight_layout()
+    plot_style.legend_outside(plt.gcf())
+    plot_style.rasterize_dense(plt.gcf())
+    plt.savefig(fig_name(os.path.join(output_dir, "auprc_vs_jaccard_scatter.png")), dpi=300, bbox_inches="tight")
+    plt.close()
+    df_lfc = df_results.drop_duplicates(subset=["fraction", "replicate", "method", "cluster"])
+    for y_col, fname in [
+        ("avg_abs_lfc", "avg_lfc_vs_subsampling.png"),
+        ("n_sig_genes", "n_sig_genes_vs_subsampling.png"),
+        ("n_genes_de_table", "n_genes_de_table_vs_subsampling.png"),
+        ("n_genes_used", "n_genes_used_vs_subsampling.png"),
+        ("frac_de_genes_valid_score", "frac_de_genes_valid_score_vs_subsampling.png"),
+        ("n_cells_cluster", "n_cells_cluster_vs_subsampling.png"),
+        ("n_cells_other", "n_cells_other_vs_subsampling.png"),
+    ]:
+        if y_col not in df_lfc.columns:
+            continue
+        fig, ax = plt.subplots(figsize=(7.2, 2.6))
+        _plot_box_pandas(df_lfc, "fraction", y_col, "method", ax=ax)
+        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_ylabel(y_col)
+        plot_style.boxplot_grid(ax)
+        plt.tight_layout()
+        _method_legend(plt.gcf(), df_results)
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, fname)), dpi=300, bbox_inches="tight")
+        plt.close()
+        # Per-cluster
+        clusters = sorted(df_lfc["cluster"].unique())
+        fig, axes = plt.subplots(1, len(clusters), figsize=(3.6 * len(clusters), 2.6), sharey=True)
+        if len(clusters) == 1:
+            axes = [axes]
+        for ax, cl in zip(axes, clusters):
+            sub = df_lfc[df_lfc["cluster"] == cl]
+            _plot_box_pandas(sub, "fraction", y_col, "method", ax=ax)
+            ax.set_title(str(cl))
+            ax.set_xlabel("Sub-sampling fraction (p)")
+            plot_style.boxplot_grid(ax)
+        axes[0].set_ylabel(y_col)
+        plt.tight_layout()
+        _method_legend(plt.gcf(), df_results)
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, fname.replace(".png", "_by_cluster.png"))), dpi=300, bbox_inches="tight")
+        plt.close()
+    # DE time per method (one value per task per method)
+    if "de_time_s" in df_results.columns:
+        df_time = df_results.drop_duplicates(subset=["fraction", "replicate", "method"])
+        fig, ax = plt.subplots(figsize=(7.2, 2.6))
+        _plot_box_pandas(df_time, "fraction", "de_time_s", "method", ax=ax)
+        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_ylabel("DE time (s)")
+        plot_style.boxplot_grid(ax)
+        plt.tight_layout()
+        _method_legend(plt.gcf(), df_results)
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, "de_time_s_vs_subsampling.png")), dpi=300, bbox_inches="tight")
+        plt.close()
+
+
 def main():
     parser = argparse.ArgumentParser(description="Parallelized sub-sampling analysis with nested Binomial sampling")
     parser.add_argument("--config", type=str, required=True, help="Path to YAML config")
-    parser.add_argument("--output-dir", type=str, default="output_subsampling_parallel", help="Output directory")
+    parser.add_argument("--output-dir", type=str, default=str(results_dir(__file__)), help="Output directory (default: lymphnode/results)")
     parser.add_argument("--n-workers", type=int, default=8, help="Number of parallel workers")
     parser.add_argument("--skip-mast", action="store_true", help="Skip MAST DE (faster runs for debugging)")
     parser.add_argument("--skip-gsea", action="store_true", help="Skip GSEA NES (avoids gseapy errors/noise)")
     parser.add_argument("--order-only", action="store_true", help="Use only rank order for AUPR/GSEA (replace scores with ranks)")
+    parser.add_argument("--plot-only", action="store_true",
+                        help="Redraw the figures from OUTPUT_DIR/subsampling_results_raw.csv without re-running")
     args = parser.parse_args()
+
+    if args.plot_only:
+        raw = require_input(os.path.join(args.output_dir, "subsampling_results_raw.csv"),
+                            what="the lymph node subsampling results",
+                            source="run `python -m lymphnode.subsampling --config ...` first")
+        plot_results(pd.read_csv(raw), load_config(args.config)["top_genes"], args.output_dir)
+        return
 
     print("\n" + "=" * 80)
     print("PARALLELIZED SUB-SAMPLING ANALYSIS -- NESTED BINOMIAL DESIGN")
@@ -983,131 +1146,7 @@ def main():
 
     # ---- Plots ----
     print(f"\n[7/8] Generating plots (per-cluster and combined)...")
-    # Metrics to plot; each gets a combined plot and a per-cluster faceted plot
-    plot_metrics = [
-        ("jaccard_top", "jaccard_top_vs_subsampling.png"),
-        ("jaccard_all", "jaccard_all_vs_subsampling.png"),
-        ("auprc", "auprc_vs_subsampling.png"),
-    ]
-    if "gsea_nes" in df_results.columns:
-        plot_metrics.append(("gsea_nes", "gsea_nes_vs_subsampling.png"))
-    for y_col, fname in plot_metrics:
-        if y_col not in df_results.columns:
-            continue
-        # Combined (all clusters) - use pandas/matplotlib to avoid seaborn boxplot bugs
-        fig, ax = plt.subplots(figsize=(12, 6))
-        _plot_box_pandas(df_results, "fraction", y_col, "method", ax=ax)
-        ax.set_xlabel("Sub-sampling fraction (p)")
-        ax.set_ylabel(y_col)
-        ax.grid(True, axis="y", alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(args.output_dir, fname)), dpi=300)
-        plt.close()
-        # Per-cluster: one panel per cluster
-        clusters = sorted(df_results["cluster"].unique())
-        fig, axes = plt.subplots(1, len(clusters), figsize=(6 * len(clusters), 5), sharey=True)
-        if len(clusters) == 1:
-            axes = [axes]
-        for ax, cl in zip(axes, clusters):
-            sub = df_results[df_results["cluster"] == cl]
-            _plot_box_pandas(sub, "fraction", y_col, "method", ax=ax)
-            ax.set_title(str(cl))
-            ax.set_xlabel("Sub-sampling fraction (p)")
-            ax.grid(True, axis="y", alpha=0.3)
-        axes[0].set_ylabel(y_col)
-        plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(args.output_dir, fname.replace(".png", "_by_cluster.png"))), dpi=300)
-        plt.close()
-    # Precision@k multi-panel (combined)
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    for ax, k in zip(axes.flat, [10, 20, 50, 100]):
-        col = f"precision_at_{k}"
-        if col in df_results.columns:
-            _plot_box_pandas(df_results, "fraction", col, "method", ax=ax)
-            ax.set_ylabel(f"Precision@{k}")
-        ax.set_xlabel("Sub-sampling fraction (p)")
-        ax.grid(True, axis="y", alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(fig_name(os.path.join(args.output_dir, "precision_at_k_vs_subsampling.png")), dpi=300)
-    plt.close()
-    # Precision@k by cluster
-    for k in [10, 20, 50, 100]:
-        col = f"precision_at_{k}"
-        if col not in df_results.columns:
-            continue
-        clusters = sorted(df_results["cluster"].unique())
-        fig, axes = plt.subplots(1, len(clusters), figsize=(6 * len(clusters), 4), sharey=True)
-        if len(clusters) == 1:
-            axes = [axes]
-        for ax, cl in zip(axes, clusters):
-            sub = df_results[df_results["cluster"] == cl]
-            _plot_box_pandas(sub, "fraction", col, "method", ax=ax)
-            ax.set_title(str(cl))
-            ax.set_xlabel("Sub-sampling fraction (p)")
-            ax.set_ylabel(f"Precision@{k}")
-            ax.grid(True, axis="y", alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(args.output_dir, f"precision_at_{k}_vs_subsampling_by_cluster.png")), dpi=300)
-        plt.close()
-    # AUPRC vs Jaccard scatter
-    plt.figure(figsize=(10, 8))
-    for method in df_results["method"].unique():
-        subset = df_results[df_results["method"] == method]
-        plt.scatter(subset["jaccard_top"], subset["auprc"], alpha=0.3, label=method, s=20,
-                    color=method_color(method))
-    plt.xlabel(f"Jaccard (top {config['top_genes']} genes)")
-    plt.ylabel("AUPRC")
-    plt.legend(title="Method")
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(fig_name(os.path.join(args.output_dir, "auprc_vs_jaccard_scatter.png")), dpi=300)
-    plt.close()
-    df_lfc = df_results.drop_duplicates(subset=["fraction", "replicate", "method", "cluster"])
-    for y_col, fname in [
-        ("avg_abs_lfc", "avg_lfc_vs_subsampling.png"),
-        ("n_sig_genes", "n_sig_genes_vs_subsampling.png"),
-        ("n_genes_de_table", "n_genes_de_table_vs_subsampling.png"),
-        ("n_genes_used", "n_genes_used_vs_subsampling.png"),
-        ("frac_de_genes_valid_score", "frac_de_genes_valid_score_vs_subsampling.png"),
-        ("n_cells_cluster", "n_cells_cluster_vs_subsampling.png"),
-        ("n_cells_other", "n_cells_other_vs_subsampling.png"),
-    ]:
-        if y_col not in df_lfc.columns:
-            continue
-        fig, ax = plt.subplots(figsize=(10, 6))
-        _plot_box_pandas(df_lfc, "fraction", y_col, "method", ax=ax)
-        ax.set_xlabel("Sub-sampling fraction (p)")
-        ax.set_ylabel(y_col)
-        ax.grid(True, axis="y", alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(args.output_dir, fname)), dpi=300)
-        plt.close()
-        # Per-cluster
-        clusters = sorted(df_lfc["cluster"].unique())
-        fig, axes = plt.subplots(1, len(clusters), figsize=(6 * len(clusters), 5), sharey=True)
-        if len(clusters) == 1:
-            axes = [axes]
-        for ax, cl in zip(axes, clusters):
-            sub = df_lfc[df_lfc["cluster"] == cl]
-            _plot_box_pandas(sub, "fraction", y_col, "method", ax=ax)
-            ax.set_title(str(cl))
-            ax.set_xlabel("Sub-sampling fraction (p)")
-            ax.grid(True, axis="y", alpha=0.3)
-        axes[0].set_ylabel(y_col)
-        plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(args.output_dir, fname.replace(".png", "_by_cluster.png"))), dpi=300)
-        plt.close()
-    # DE time per method (one value per task per method)
-    if "de_time_s" in df_results.columns:
-        df_time = df_results.drop_duplicates(subset=["fraction", "replicate", "method"])
-        fig, ax = plt.subplots(figsize=(10, 6))
-        _plot_box_pandas(df_time, "fraction", "de_time_s", "method", ax=ax)
-        ax.set_xlabel("Sub-sampling fraction (p)")
-        ax.set_ylabel("DE time (s)")
-        ax.grid(True, axis="y", alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(args.output_dir, "de_time_s_vs_subsampling.png")), dpi=300)
-        plt.close()
+    plot_results(df_results, config["top_genes"], args.output_dir)
 
     # ---- Summary ----
     print(f"\n[8/8] Summary")

@@ -5,11 +5,10 @@ import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.lines import Line2D
 
-from method_colors import method_color
+import plot_style
+from method_colors import method_color, method_draw_order, method_label, method_order
 from paths import fig_name, require_input, results_dir
 
-INK, MUTED = '#0b0b0b', '#52514e'
-METHODS = {'log1p t-test': r'log1p $t$-test', "LN's t-test": r"LN's $t$-test"}
 # Var(X) from lowest (Poisson) to highest: solid, long dashes, short dashes, dots
 VAR_STYLES = ['-', (0, (6, 2)), (0, (3, 2)), (0, (1, 1.5))]
 ALPHA = 0.8
@@ -41,32 +40,47 @@ def ratio_axis(ax, sub):
     ax.set_xlim(1 - pad, hi + pad)
 
 
-def plot(sub, mu):
+def var_multiples(sub, mu):
+    """Var(X) as multiples of mu, so panels at different mu share one line-style key."""
+    return [round(vx / mu, 6) for vx in sorted(sub.var_x.unique())]
+
+
+def panel(ax, sub, mu):
     # method by colour, Var(X) by line style
-    var_xs = sorted(sub.var_x.unique())
-    fig, ax = plt.subplots(figsize=(3.6, 2.6))
-    for method in METHODS:
-        for vx, ls in zip(var_xs, VAR_STYLES):
+    for method in method_draw_order(sub.method):
+        for vx, ls in zip(sorted(sub.var_x.unique()), VAR_STYLES):
             s = sub[(sub.var_x == vx) & (sub.method == method)].sort_values('ratio')
             ax.plot(s.ratio, s.value, color=method_color(method), lw=1.3, ls=ls, alpha=ALPHA)
-
-    ax.set_title(rf'$\mu$ = {mu:g}', fontsize=8, color=INK)
+    ax.set_title(rf'$\mu$ = {mu:g}')
     ratio_axis(ax, sub)
     ax.set_xlabel(r'Var$(Y)$ / Var$(X)$')
-    ax.set_ylabel('False positive rate')
-    ax.set_ylim(-0.03, 1.03)
 
-    style = {'fontsize': 6, 'title_fontsize': 6, 'frameon': False, 'loc': 'upper left',
-             'alignment': 'left'}
-    methods = ax.legend(handles=[Line2D([], [], color=method_color(m), lw=1.4, alpha=ALPHA, label=label)
-                                 for m, label in METHODS.items()],
+
+def plot(df, base_mus):
+    multiples = {mu: var_multiples(df[df.base_mu == mu], mu) for mu in base_mus}
+    if len({tuple(m) for m in multiples.values()}) > 1:
+        raise SystemExit(f'Var(X) is not the same multiples of mu in every sweep: {multiples}')
+
+    fig, axes = plt.subplots(1, len(base_mus), figsize=plot_style.figsize(len(base_mus)), sharey=True,
+                             squeeze=False)
+    axes = axes[0]
+    for ax, mu in zip(axes, base_mus):
+        panel(ax, df[df.base_mu == mu], mu)
+    axes[0].set_ylabel('FPR')
+    axes[0].set_ylim(-0.03, 1.03)
+
+    ax = axes[-1]
+    style = {'frameon': False, 'loc': 'upper left', 'alignment': 'left'}
+    methods = ax.legend(handles=[Line2D([], [], color=method_color(m), lw=1.4, alpha=ALPHA, label=method_label(m))
+                                 for m in method_order(df.method)],
                         title='Method', bbox_to_anchor=(1.01, 1.0), **style)
     ax.add_artist(methods)
-    var_key = ax.legend(handles=[Line2D([], [], color=INK, lw=1.3, ls=ls, label=f'{vx:g}')
-                                 for vx, ls in zip(var_xs, VAR_STYLES)],
+    var_key = ax.legend(handles=[Line2D([], [], color='black', lw=1.3, ls=ls,
+                                        label=r'$\mu$' if k == 1 else rf'{k:g}$\mu$')
+                                 for k, ls in zip(multiples[base_mus[0]], VAR_STYLES)],
                         title=r'Var$(X)$', bbox_to_anchor=(1.01, 0.62), handlelength=3, **style)
 
-    out = results_dir(__file__) / fig_name(f'variance_ratio_vs_fpr_mu{int(mu)}')
+    out = results_dir(__file__) / fig_name('variance_ratio_vs_fpr')
     fig.savefig(out, dpi=200, bbox_inches='tight', bbox_extra_artists=[methods, var_key])
     plt.close(fig)
     print(f'wrote {out}')
@@ -78,16 +92,13 @@ def run(base_mus):
     if n > len(VAR_STYLES):
         raise SystemExit(f'{n} values of Var(X), but only {len(VAR_STYLES)} line styles')
 
-    plt.rcParams.update({'font.size': 8, 'axes.spines.top': False, 'axes.spines.right': False,
-                         'axes.edgecolor': MUTED, 'xtick.color': MUTED, 'ytick.color': MUTED,
-                         'axes.labelcolor': INK})
-    for mu in base_mus:
-        plot(df[df.base_mu == mu], mu)
+    plot_style.use()
+    plot(df, base_mus)
 
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
-        description="null.py's FPR sweeps against Var(Y)/Var(X), one figure per base_mu."
+        description="null.py's FPR sweeps against Var(Y)/Var(X), one panel per base_mu."
     )
     ap.add_argument('--base-mu', type=float, nargs='+', default=[5, 50],
                     help='sweeps to plot, each from null.py --base-mu')

@@ -6,7 +6,7 @@ This script runs DE using both LN test and Scanpy's t-test (and wilcoxon) and MA
 saving all results to the updated AnnData file. Uses shared de_utils for all DE steps.
 
 Usage:
-    python run_celltype_de.py --config config.yaml [--output-dir output/]
+    python run_celltype_de.py --config config.yaml [--output-dir celltype/results/]
 """
 
 import argparse
@@ -17,7 +17,7 @@ import scanpy as sc
 import scipy.sparse as sp
 import pandas as pd
 
-from paths import require_input
+from paths import require_input, results_dir
 
 # Run from reproducibility/ as `python -m celltype.de`, which puts that
 # directory on sys.path -- no path manipulation needed.
@@ -54,7 +54,7 @@ def main():
         description="Perform differential expression analysis between two specified cell types"
     )
     parser.add_argument("--config", type=str, required=True, help="Path to YAML configuration file")
-    parser.add_argument("--output-dir", type=str, default="output", help="Directory to save output files")
+    parser.add_argument("--output-dir", type=str, default=str(results_dir(__file__)), help="Directory to save output files (default: celltype/results)")
     args = parser.parse_args()
 
     print(f"Loading configuration from {args.config}...")

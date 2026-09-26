@@ -11,8 +11,9 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import pandas as pd
 
-from paths import data_dir, fig_name, require_input
-from method_colors import method_color
+from paths import data_dir, fig_name, require_input, results_dir
+import plot_style
+from method_colors import method_color, method_draw_order, method_label, method_order
 import json
 from sklearn.metrics import average_precision_score, precision_recall_curve, auc
 
@@ -20,6 +21,7 @@ from sklearn.metrics import average_precision_score, precision_recall_curve, auc
 # directory on sys.path -- no path manipulation needed.
 from lntest import get_LN_lfcs as get_DELN_lfcs
 from baselines import get_test_results, scanpy_sig_test
+plot_style.use()
 
 
 def fpr_test_single(X, Y):
@@ -666,10 +668,10 @@ def save_pr_curve_data(p_values, results_by_p, output_file, q, lfc):
 
 def plot_fpr_results(p_values, results_by_p, output_file):
     """Plot log10(FPR) and log10(FPR Filtered) vs p for all methods."""
-    methods = list(results_by_p[p_values[0]].keys())
+    methods = method_draw_order(results_by_p[p_values[0]])
     colors = [method_color(m) for m in methods]
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, axes = plt.subplots(1, 2, figsize=plot_style.figsize(2))
     
     # Plot FPR
     for idx, method in enumerate(methods):
@@ -677,14 +679,12 @@ def plot_fpr_results(p_values, results_by_p, output_file):
         fpr_log10_stds = [results_by_p[p][method]["fpr_log10_std"] for p in p_values]
         
         axes[0].errorbar(p_values, fpr_log10_means, yerr=fpr_log10_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0].set_xlabel('Split probability (p)', fontsize=12)
-    axes[0].set_ylabel('log10(FPR)', fontsize=12)
-    axes[0].set_title('FPR vs Split Probability', fontsize=14, fontweight='bold')
-    axes[0].grid(True, alpha=0.3)
-    axes[0].legend(loc='best', fontsize=10)
+    axes[0].set_xlabel('Split probability (p)')
+    axes[0].set_ylabel('log10(FPR)')
+    axes[0].set_title('FPR vs Split Probability')
     
     # Plot FPR Filtered
     for idx, method in enumerate(methods):
@@ -692,16 +692,15 @@ def plot_fpr_results(p_values, results_by_p, output_file):
         fpr_filtered_log10_stds = [results_by_p[p][method]["fpr_filtered_log10_std"] for p in p_values]
         
         axes[1].errorbar(p_values, fpr_filtered_log10_means, yerr=fpr_filtered_log10_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1].set_xlabel('Split probability (p)', fontsize=12)
-    axes[1].set_ylabel('log10(FPR Filtered)', fontsize=12)
-    axes[1].set_title('FPR Filtered (|lfc| > 0.25) vs Split Probability', fontsize=14, fontweight='bold')
-    axes[1].grid(True, alpha=0.3)
-    axes[1].legend(loc='best', fontsize=10)
+    axes[1].set_xlabel('Split probability (p)')
+    axes[1].set_ylabel('log10(FPR Filtered)')
+    axes[1].set_title('FPR Filtered (|lfc| > 0.25) vs Split Probability')
     
     plt.tight_layout()
+    plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -709,10 +708,10 @@ def plot_fpr_results(p_values, results_by_p, output_file):
 
 def plot_de_results(p_values, results_by_p, output_file, q, lfc):
     """Plot TPR, FPR, FNR, and TNR vs p for all methods."""
-    methods = list(results_by_p[p_values[0]].keys())
+    methods = method_draw_order(results_by_p[p_values[0]])
     colors = [method_color(m) for m in methods]
     
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    fig, axes = plt.subplots(2, 2, figsize=plot_style.figsize(2, 2))
     
     # Plot TPR
     for idx, method in enumerate(methods):
@@ -720,14 +719,12 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
         tpr_stds = [results_by_p[p][method]["tpr_std"] for p in p_values]
         
         axes[0, 0].errorbar(p_values, tpr_means, yerr=tpr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0, 0].set_xlabel(r'Split probability $p$', fontsize=12)
-    axes[0, 0].set_ylabel('True Positive Rate (TPR)', fontsize=12)
-    axes[0, 0].set_title('TPR vs Split Probability', fontsize=14, fontweight='bold')
-    axes[0, 0].grid(True, alpha=0.3)
-    axes[0, 0].legend(loc='best', fontsize=10)
+    axes[0, 0].set_xlabel(r'Split probability $p$')
+    axes[0, 0].set_ylabel('TPR')
+    axes[0, 0].set_title('TPR vs Split Probability')
     axes[0, 0].set_ylim([0, 1])
     
     # Plot FPR
@@ -736,14 +733,12 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
         fpr_stds = [results_by_p[p][method]["fpr_std"] for p in p_values]
         
         axes[0, 1].errorbar(p_values, fpr_means, yerr=fpr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0, 1].set_xlabel(r'Split probability $p$', fontsize=12)
-    axes[0, 1].set_ylabel('False Positive Rate (FPR)', fontsize=12)
-    axes[0, 1].set_title('FPR vs Split Probability', fontsize=14, fontweight='bold')
-    axes[0, 1].grid(True, alpha=0.3)
-    axes[0, 1].legend(loc='best', fontsize=10)
+    axes[0, 1].set_xlabel(r'Split probability $p$')
+    axes[0, 1].set_ylabel('FPR')
+    axes[0, 1].set_title('FPR vs Split Probability')
     axes[0, 1].set_ylim([0, 1])
     
     # Plot FNR
@@ -752,14 +747,12 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
         fnr_stds = [results_by_p[p][method]["fnr_std"] for p in p_values]
         
         axes[1, 0].errorbar(p_values, fnr_means, yerr=fnr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1, 0].set_xlabel(r'Split probability $p$', fontsize=12)
-    axes[1, 0].set_ylabel('False Negative Rate (FNR)', fontsize=12)
-    axes[1, 0].set_title('FNR vs Split Probability', fontsize=14, fontweight='bold')
-    axes[1, 0].grid(True, alpha=0.3)
-    axes[1, 0].legend(loc='best', fontsize=10)
+    axes[1, 0].set_xlabel(r'Split probability $p$')
+    axes[1, 0].set_ylabel('False Negative Rate (FNR)')
+    axes[1, 0].set_title('FNR vs Split Probability')
     axes[1, 0].set_ylim([0, 1])
     
     # Plot TNR
@@ -768,17 +761,16 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
         tnr_stds = [results_by_p[p][method]["tnr_std"] for p in p_values]
         
         axes[1, 1].errorbar(p_values, tnr_means, yerr=tnr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1, 1].set_xlabel(r'Split probability $p$', fontsize=12)
-    axes[1, 1].set_ylabel('True Negative Rate (TNR)', fontsize=12)
-    axes[1, 1].set_title(f'TNR vs Split Probability (q={q}, lfc={lfc})', fontsize=14, fontweight='bold')
-    axes[1, 1].grid(True, alpha=0.3)
-    axes[1, 1].legend(loc='best', fontsize=10)
+    axes[1, 1].set_xlabel(r'Split probability $p$')
+    axes[1, 1].set_ylabel('True Negative Rate (TNR)')
+    axes[1, 1].set_title(f'TNR vs Split Probability (q={q}, lfc={lfc})')
     axes[1, 1].set_ylim([0, 1])
     
     plt.tight_layout()
+    plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -786,23 +778,21 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
 
 def plot_pr_results(p_values, results_by_p, output_file):
     """Plot Average Precision (AP) and PR-AUC vs p for all methods."""
-    methods = list(results_by_p[p_values[0]].keys())
+    methods = method_draw_order(results_by_p[p_values[0]])
     colors = [method_color(m) for m in methods]
     
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, axes = plt.subplots(1, 2, figsize=plot_style.figsize(2))
     
     # Plot AP
     for idx, method in enumerate(methods):
         ap_means = [results_by_p[p][method].get("ap_mean", np.nan) for p in p_values]
         ap_stds = [results_by_p[p][method].get("ap_std", np.nan) for p in p_values]
         axes[0].errorbar(p_values, ap_means, yerr=ap_stds,
-                         marker='o', capsize=5, capthick=2, label=method,
-                         color=colors[idx], linewidth=2, markersize=6)
-    axes[0].set_xlabel(r'Split probability $p$', fontsize=12)
-    axes[0].set_ylabel('Average Precision (AP)', fontsize=12)
-    axes[0].set_title('AP vs Split Probability', fontsize=14, fontweight='bold')
-    axes[0].grid(True, alpha=0.3)
-    axes[0].legend(loc='best', fontsize=10)
+                         label=method_label(method),
+                         color=colors[idx], **plot_style.ERRORBAR)
+    axes[0].set_xlabel(r'Split probability $p$')
+    axes[0].set_ylabel('Average Precision (AP)')
+    axes[0].set_title('AP vs Split Probability')
     axes[0].set_ylim([0, 1])
     
     # Plot PR-AUC (trapezoidal)
@@ -810,16 +800,15 @@ def plot_pr_results(p_values, results_by_p, output_file):
         pr_auc_means = [results_by_p[p][method].get("pr_auc_mean", np.nan) for p in p_values]
         pr_auc_stds = [results_by_p[p][method].get("pr_auc_std", np.nan) for p in p_values]
         axes[1].errorbar(p_values, pr_auc_means, yerr=pr_auc_stds,
-                         marker='o', capsize=5, capthick=2, label=method,
-                         color=colors[idx], linewidth=2, markersize=6)
-    axes[1].set_xlabel(r'Split probability $p$', fontsize=12)
-    axes[1].set_ylabel('PR-AUC (Trapezoidal)', fontsize=12)
-    axes[1].set_title('PR-AUC vs Split Probability', fontsize=14, fontweight='bold')
-    axes[1].grid(True, alpha=0.3)
-    axes[1].legend(loc='best', fontsize=10)
+                         label=method_label(method),
+                         color=colors[idx], **plot_style.ERRORBAR)
+    axes[1].set_xlabel(r'Split probability $p$')
+    axes[1].set_ylabel('PR-AUC (Trapezoidal)')
+    axes[1].set_title('PR-AUC vs Split Probability')
     axes[1].set_ylim([0, 1])
     
     plt.tight_layout()
+    plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -827,7 +816,7 @@ def plot_pr_results(p_values, results_by_p, output_file):
 
 def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
     """Plot Precision vs Recall curves for each p value (PR curves based on gene ranking)."""
-    methods = list(results_by_p[p_values[0]].keys())
+    methods = method_draw_order(results_by_p[p_values[0]])
     colors = [method_color(m) for m in methods]
     
     # Create subplots: one for each p value
@@ -835,7 +824,7 @@ def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
     n_cols = min(3, n_p)
     n_rows = (n_p + n_cols - 1) // n_cols
     
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=plot_style.figsize(n_cols, n_rows))
     if n_p == 1:
         axes = [axes]
     else:
@@ -852,9 +841,10 @@ def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
             
             if recall_grid is not None and precision_curve_mean is not None:
                 # Plot mean curve
-                ax.plot(recall_grid, precision_curve_mean, 
-                       label=f'{method} (AUC={pr_auc_curve_mean:.3f})',
-                       color=colors[method_idx], linewidth=2)
+                ax.plot(recall_grid, precision_curve_mean,
+                       label=method_label(method), color=colors[method_idx], linewidth=1.3)
+                ax.text(0.03, 0.03 + 0.09 * (len(methods) - 1 - method_order(methods).index(method)), f'AUC {pr_auc_curve_mean:.3f}',
+                        transform=ax.transAxes, color=colors[method_idx], fontsize=plot_style.SMALL)
                 
                 # Plot std as shaded region
                 if precision_curve_std is not None:
@@ -863,12 +853,9 @@ def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
                                   precision_curve_mean + precision_curve_std,
                                   alpha=0.2, color=colors[method_idx])
         
-        ax.set_xlabel('Recall', fontsize=11)
-        ax.set_ylabel('Precision', fontsize=11)
-        ax.set_title(f'Precision vs Recall (p={p:.3f}, q={q}, lfc={lfc})', 
-                    fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc='best', fontsize=9)
+        ax.set_xlabel('Recall')
+        ax.set_ylabel('Precision')
+        ax.set_title(f'p = {p:.3f}')
         ax.set_xlim([0, 1])
         ax.set_ylim([0, 1])
     
@@ -877,6 +864,7 @@ def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
         axes[idx].axis('off')
     
     plt.tight_layout()
+    plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -901,8 +889,8 @@ if __name__ == '__main__':
                         help='Number of parallel jobs (default: all available cores)')
     parser.add_argument('--seed', type=int, default=0,
                         help='Seed for the per-repetition seeds (default: 0)')
-    parser.add_argument('--output', type=str, default=fig_name('shape_split_test_plot'),
-                        help='Output file for the plot (default: shape_split_test_plot.png)')
+    parser.add_argument('--output', type=str, default=str(results_dir(__file__) / fig_name('shape_split_test_plot')),
+                        help='Output file for the plot (default: kidney/results/shape_split_test_plot.pdf)')
     parser.add_argument('--results_file', type=str, default=None,
                         help='Output file for results CSV (default: auto-generated from output name)')
     # NOT merged_blobs_in_cluster_5.h5ad. That is the per-capsule aggregate the two
@@ -941,7 +929,7 @@ if __name__ == '__main__':
         raise ValueError("q must be between 0 and 1")
     
     if q == 0:
-        print("Running in FPR test mode (q=0, no DE genes introduced)")
+        print("Running in FPR test mode (q=0, no DEGs introduced)")
     else:
         print(f"Running in DE test mode (q={q}, lfc={lfc})")
     

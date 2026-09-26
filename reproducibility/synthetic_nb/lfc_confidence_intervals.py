@@ -2,12 +2,14 @@ import numpy as np
 from lntest import get_LN_lfcs as get_DELN_lfcs
 from baselines import scanpy_sig_test
 from paths import fig_name, results_dir
-from method_colors import method_color
+import plot_style
+from method_colors import method_color, method_label
 
 
 def _save(name):
     out = results_dir(__file__) / fig_name(name)
-    plt.savefig(out, dpi=200, bbox_inches='tight')
+    plot_style.rasterize_dense(plt.gcf())
+    plt.savefig(out, dpi=plot_style.RASTER_DPI, bbox_inches='tight')
     plt.close()
     print(f'wrote {out}')
 import matplotlib.pyplot as plt
@@ -77,14 +79,15 @@ print(f"Estimated LFC is below CI {np.sum(sc_lfcs[non_de_idx] < confidence_inter
 print(f"Estimated LFC is above CI {np.sum(sc_lfcs[non_de_idx] > confidence_intervals[1, non_de_idx])} times for non-DEGs")
 print(f"Frequency of estimated LFC that are above CI {np.sum(sc_lfcs[non_de_idx] > confidence_intervals[1, non_de_idx]) / np.sum(non_de_idx)} for  non-DEGs")
 print()
-plt.rcParams.update({'font.size': 20})
-plt.errorbar(true_lfcs[0], (mean_Y - mean_X) / np.log(2), yerr=1.96 * se, fmt='none', label='Estimated CIs', color=method_color('t-test'), alpha=0.5)
-plt.plot(true_lfcs[0], sc_lfcs, 'o', label='Estimated LFCs', color=method_color('t-test'))
-plt.plot(true_lfcs[0], true_lfcs[0], 'o', label='True LFCs', color='0.7')
+plot_style.use()
+plt.figure(figsize=plot_style.figsize())
+plt.errorbar(true_lfcs[0], (mean_Y - mean_X) / np.log(2), yerr=1.96 * se, fmt='none', label='Estimated CIs', color=method_color('t-test'), alpha=0.5, lw=0.8)
+plt.plot(true_lfcs[0], sc_lfcs, 'o', ms=2, label='Estimated LFCs', color=method_color('t-test'))
+plt.plot(true_lfcs[0], true_lfcs[0], 'o', ms=2, label='True LFCs', color='0.7')
 plt.xlabel('LFCs')
 plt.ylabel('LFCs')
-plt.title('Scanpy $t$-test')
-plt.legend(fontsize=15)
+plt.title(method_label('t-test'))
+plt.legend()
 plt.tight_layout()
 _save('Scanpy_confidence_intervals.png')
 
@@ -93,14 +96,14 @@ deln_confidence_intervals = deln_lfcs + 1.96 * np.array([-gamma, gamma])
 print(f"LN's Estimated LFC is below CI {np.sum(deln_lfcs < deln_confidence_intervals[0])} times")
 print(f"LN's Estimated LFC is above CI {np.sum(deln_lfcs > deln_confidence_intervals[1])} times")
 
-plt.rcParams.update({'font.size': 20})
-plt.errorbar(true_lfcs[0], deln_lfcs, yerr=1.96 * gamma, fmt='none', label='Estimated CIs', color=method_color('LN'), alpha=0.5)
-plt.plot(true_lfcs[0], deln_lfcs, 'o', label='Estimated LFCs', color=method_color('LN'))
-plt.plot(true_lfcs[0], true_lfcs[0], 'o', label='True LFCs', color='0.7')
+plt.figure(figsize=plot_style.figsize())
+plt.errorbar(true_lfcs[0], deln_lfcs, yerr=1.96 * gamma, fmt='none', label='Estimated CIs', color=method_color('LN'), alpha=0.5, lw=0.8)
+plt.plot(true_lfcs[0], deln_lfcs, 'o', ms=2, label='Estimated LFCs', color=method_color('LN'))
+plt.plot(true_lfcs[0], true_lfcs[0], 'o', ms=2, label='True LFCs', color='0.7')
 plt.xlabel('LFCs')
 plt.ylabel('LFCs')
-plt.title("LN's $t$-test")
-plt.legend(fontsize=15)
+plt.title(method_label('LN'))
+plt.legend()
 plt.tight_layout()
 _save('LNs_confidence_intervals.png')
 plt.show()

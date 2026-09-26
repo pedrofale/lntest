@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 
 from utils_frozen import digamma, trigamma, get_intervals
 from paths import fig_name, results_dir
-from method_colors import method_color
+import plot_style
+from method_colors import method_color, method_label
 
 SEED = 0
 
@@ -92,13 +93,11 @@ def lfc_coverage():
     p = 0.6
     x_treatment, a_treatment, b_treatment = generate_count_data(r_treatment, p, 1000)
     x_ctrl, a_ctrl, b_ctrl = generate_count_data(r_ctrl, p, 1000)
-    f, ax = plt.subplots(3, 1)
-    ax[0].set_title('Treatment NB')
-    ax[0].hist(x_treatment, bins=100, label=f'$r={r_treatment},p={p}$')
-    ax[0].legend(loc='upper right')
-    ax[1].set_title('Ctrl NB')
-    ax[1].hist(x_ctrl, bins=100, color='r', label=f'$r={r_ctrl},p={p}$')
-    ax[1].legend(loc='upper right')
+    f, ax = plt.subplots(3, 1, figsize=plot_style.figsize(1, 3))
+    ax[0].set_title(f'Treatment NB ($r={r_treatment}, p={p}$)')
+    ax[0].hist(x_treatment, bins=100)
+    ax[1].set_title(f'Ctrl NB ($r={r_ctrl}, p={p}$)')
+    ax[1].hist(x_ctrl, bins=100, color='r')
 
     coverage_ziln = []
     coverage_normal = []
@@ -149,13 +148,13 @@ def lfc_coverage():
                     (np.exp(lfc) > lfc_normal_intervals[0, :]) * (np.exp(lfc) < lfc_normal_intervals[1, :]))) / experiments
                 coverage_normal.append(coverage_percentage)
             print(model + ":", coverage_percentage)
-    ax[2].plot(n_list, coverage_ziln, color=method_color('ZILN'), label='ZILN')
+    ax[2].plot(n_list, coverage_log1p, color=method_color('log1p'), label=method_label('log1p'))
     ax[2].plot(n_list, coverage_normal, color='0.5', label='normal')
-    ax[2].plot(n_list, coverage_log1p, color=method_color('log1p'), label='log1p')
     ax[2].hlines(0.95, n_list[0], n_list[-1], color='black', linestyle='--', label='95% coverage')
-    ax[2].legend(loc='best')
+    ax[2].plot(n_list, coverage_ziln, color=method_color('ZILN'), label=method_label('ZILN'))  # on top
     ax[2].set_xlabel('$n$')
     plt.tight_layout()
+    plot_style.legend_outside(f, *ax[2].get_legend_handles_labels(), y=0.33)
     _save(f, 'lfc_ci_coverage.png')
 
     rows = [
@@ -188,5 +187,6 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--figure', choices=[*FIGURES, 'all'], default='coverage')
     args = ap.parse_args()
+    plot_style.use()
     for name in (FIGURES if args.figure == 'all' else [args.figure]):
         FIGURES[name]()

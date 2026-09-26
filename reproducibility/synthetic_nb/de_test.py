@@ -23,7 +23,7 @@ SETTINGS = {
 
 
 def de_shift(setting):
-    """Upward shift of a DE gene's mean in group 1: |N(0, 5)| when sparse, N(15, 5) when dense."""
+    """Upward shift of a DEG's mean in group 1: |N(0, 5)| when sparse, N(15, 5) when dense."""
     if setting == 'sparse':
         return np.abs(np.random.normal(0, 5, (1, n_genes)))
     return np.random.normal(15, 5, (1, n_genes))

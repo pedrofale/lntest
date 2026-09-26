@@ -10,25 +10,12 @@ import numpy as np
 import pandas as pd
 
 from paths import fig_name, require_input
-from method_colors import method_color
+import plot_style
+from method_colors import method_color, method_draw_order, method_label, method_order
 import matplotlib.pyplot as plt
 import matplotlib
 
-# Use matplotlib's built-in math rendering (doesn't require LaTeX)
-# This provides LaTeX-style formatting without needing LaTeX installed
-matplotlib.rcParams['text.usetex'] = False
-matplotlib.rcParams['mathtext.fontset'] = 'cm'  # Computer Modern style
-matplotlib.rcParams['font.family'] = 'serif'
-
-
-def rename_method(method):
-    """Rename method names for display."""
-    method_map = {
-        'DELN': r"LN's $t$-test",
-        'Scanpy t-test': r'$t$-test',
-        'Scanpy wilcoxon': 'Wilcoxon'
-    }
-    return method_map.get(method, method)
+plot_style.use()
 
 
 def compute_log10_error_bars(mean, std):
@@ -92,20 +79,14 @@ def plot_de_results(csv_file, output_file, title_suffix=None):
     ))
     
     # Get unique methods and p values
-    methods = df['method'].unique()
+    methods = method_draw_order(df['method'])
     p_values = sorted(df['p'].unique())
     
     print(f"Found {len(methods)} methods: {methods}")
     print(f"Found {len(p_values)} p values")
     
-    # Rename methods
-    method_renames = {method: rename_method(method) for method in methods}
-    
-    # Set up colors
-    method_colors = {method: method_color(method) for method in methods}
-    
     # Create figure with 2 subplots (side by side)
-    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    fig, axes = plt.subplots(1, 2, figsize=plot_style.figsize(2))
     
     # Plot TPR
     ax_tpr = axes[0]
@@ -117,10 +98,9 @@ def plot_de_results(csv_file, output_file, title_suffix=None):
         
         ax_tpr.errorbar(
             p_vals, tpr_means, yerr=tpr_stds,
-            marker='o', capsize=5, capthick=2,
-            label=method_renames[method],
-            color=method_colors[method],
-            linewidth=2, markersize=6
+            label=method_label(method),
+            color=method_color(method),
+            **plot_style.ERRORBAR
         )
     
     # Prepare title text
@@ -130,10 +110,9 @@ def plot_de_results(csv_file, output_file, title_suffix=None):
         tpr_title = f'{tpr_title} {title_suffix}'
         fpr_title = f'{fpr_title} {title_suffix}'
     
-    ax_tpr.set_xlabel(r'$p$', fontsize=14)
-    ax_tpr.set_ylabel('True Positive Rate (TPR)', fontsize=14)
-    ax_tpr.set_title(tpr_title, fontsize=16, fontweight='bold')
-    ax_tpr.legend(loc='best', fontsize=11)
+    ax_tpr.set_xlabel(r'$p$')
+    ax_tpr.set_ylabel('TPR')
+    ax_tpr.set_title(tpr_title)
     ax_tpr.set_ylim([0, 1])
     
     # Plot FPR (log10 scale)
@@ -153,21 +132,18 @@ def plot_de_results(csv_file, output_file, title_suffix=None):
         ax_fpr.errorbar(
             p_vals, log_fpr_mean,
             yerr=[log_err_lower, log_err_upper],
-            marker='o', capsize=5, capthick=2,
-            label=method_renames[method],
-            color=method_colors[method],
-            linewidth=2, markersize=6
+            label=method_label(method),
+            color=method_color(method),
+            **plot_style.ERRORBAR
         )
     
-    ax_fpr.set_xlabel(r'$p$', fontsize=14)
-    ax_fpr.set_ylabel(r'$\log_{10}$(FPR)', fontsize=14)
-    ax_fpr.set_title(fpr_title, fontsize=16, fontweight='bold')
-    ax_fpr.legend(loc='best', fontsize=11)
+    ax_fpr.set_xlabel(r'$p$')
+    ax_fpr.set_ylabel(r'$\log_{10}$(FPR)')
+    ax_fpr.set_title(fpr_title)
     
     plt.tight_layout()
-    # Ensure output file has .eps extension
-    if not output_file.endswith('.eps'):
-        output_file = output_file.rsplit('.', 1)[0] + '.eps'
+    plot_style.legend_outside(fig)
+    output_file = fig_name(output_file)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -187,7 +163,7 @@ if __name__ == '__main__':
         '--output',
         type=str,
         required=True,
-        help='Path to output plot file (will be saved as .eps)'
+        help='Path to output plot file (PDF unless LNTEST_FIG_FORMAT says otherwise)'
     )
     parser.add_argument(
         '--title_suffix',

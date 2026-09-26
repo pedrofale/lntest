@@ -11,13 +11,15 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import pandas as pd
 
-from paths import data_dir, fig_name, require_input
-from method_colors import method_color
+from paths import data_dir, fig_name, require_input, results_dir
+import plot_style
+from method_colors import method_color, method_draw_order, method_label, method_order
 
 # Run from reproducibility/ as `python -m kidney.umi_de`, which puts that
 # directory on sys.path -- no path manipulation needed.
 from lntest import get_LN_lfcs as get_DELN_lfcs
 from baselines import scanpy_sig_test
+plot_style.use()
 
 
 def de_test_single(X, Y, selected_genes, true_signs):
@@ -253,10 +255,10 @@ def save_results(p_values, results_by_p, output_file, q, lfc):
 
 def plot_results(p_values, results_by_p, output_file, q, lfc):
     """Plot TPR, FPR, FNR, and TNR vs p for all methods."""
-    methods = list(results_by_p[p_values[0]].keys())
+    methods = method_draw_order(results_by_p[p_values[0]])
     colors = [method_color(m) for m in methods]
     
-    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    fig, axes = plt.subplots(2, 2, figsize=plot_style.figsize(2, 2))
     
     # Plot TPR
     for idx, method in enumerate(methods):
@@ -264,14 +266,12 @@ def plot_results(p_values, results_by_p, output_file, q, lfc):
         tpr_stds = [results_by_p[p][method]["tpr_std"] for p in p_values]
         
         axes[0, 0].errorbar(p_values, tpr_means, yerr=tpr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0, 0].set_xlabel(r'Downsampling ratio $p$', fontsize=12)
-    axes[0, 0].set_ylabel('True Positive Rate (TPR)', fontsize=12)
-    axes[0, 0].set_title('TPR vs Downsample Ratio', fontsize=14, fontweight='bold')
-    axes[0, 0].grid(True, alpha=0.3)
-    axes[0, 0].legend(loc='best', fontsize=10)
+    axes[0, 0].set_xlabel(r'Downsampling ratio $p$')
+    axes[0, 0].set_ylabel('TPR')
+    axes[0, 0].set_title('TPR vs Downsample Ratio')
     axes[0, 0].set_ylim([0, 1])
     
     # Plot FPR
@@ -280,14 +280,12 @@ def plot_results(p_values, results_by_p, output_file, q, lfc):
         fpr_stds = [results_by_p[p][method]["fpr_std"] for p in p_values]
         
         axes[0, 1].errorbar(p_values, fpr_means, yerr=fpr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0, 1].set_xlabel(r'Downsampling ratio $p$', fontsize=12)
-    axes[0, 1].set_ylabel('False Positive Rate (FPR)', fontsize=12)
-    axes[0, 1].set_title('FPR vs Downsample Ratio', fontsize=14, fontweight='bold')
-    axes[0, 1].grid(True, alpha=0.3)
-    axes[0, 1].legend(loc='best', fontsize=10)
+    axes[0, 1].set_xlabel(r'Downsampling ratio $p$')
+    axes[0, 1].set_ylabel('FPR')
+    axes[0, 1].set_title('FPR vs Downsample Ratio')
     axes[0, 1].set_ylim([0, 1])
     
     # Plot FNR
@@ -296,14 +294,12 @@ def plot_results(p_values, results_by_p, output_file, q, lfc):
         fnr_stds = [results_by_p[p][method]["fnr_std"] for p in p_values]
         
         axes[1, 0].errorbar(p_values, fnr_means, yerr=fnr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1, 0].set_xlabel(r'Downsampling ratio $p$', fontsize=12)
-    axes[1, 0].set_ylabel('False Negative Rate (FNR)', fontsize=12)
-    axes[1, 0].set_title('FNR vs Downsample Ratio', fontsize=14, fontweight='bold')
-    axes[1, 0].grid(True, alpha=0.3)
-    axes[1, 0].legend(loc='best', fontsize=10)
+    axes[1, 0].set_xlabel(r'Downsampling ratio $p$')
+    axes[1, 0].set_ylabel('False Negative Rate (FNR)')
+    axes[1, 0].set_title('FNR vs Downsample Ratio')
     axes[1, 0].set_ylim([0, 1])
     
     # Plot TNR
@@ -312,17 +308,16 @@ def plot_results(p_values, results_by_p, output_file, q, lfc):
         tnr_stds = [results_by_p[p][method]["tnr_std"] for p in p_values]
         
         axes[1, 1].errorbar(p_values, tnr_means, yerr=tnr_stds, 
-                        marker='o', capsize=5, capthick=2, label=method, 
-                        color=colors[idx], linewidth=2, markersize=6)
+                        label=method_label(method), 
+                        color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1, 1].set_xlabel(r'Downsampling ratio $p$', fontsize=12)
-    axes[1, 1].set_ylabel('True Negative Rate (TNR)', fontsize=12)
-    axes[1, 1].set_title(f'TNR vs Downsample Ratio (q={q}, lfc={lfc})', fontsize=14, fontweight='bold')
-    axes[1, 1].grid(True, alpha=0.3)
-    axes[1, 1].legend(loc='best', fontsize=10)
+    axes[1, 1].set_xlabel(r'Downsampling ratio $p$')
+    axes[1, 1].set_ylabel('True Negative Rate (TNR)')
+    axes[1, 1].set_title(f'TNR vs Downsample Ratio (q={q}, lfc={lfc})')
     axes[1, 1].set_ylim([0, 1])
     
     plt.tight_layout()
+    plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -348,8 +343,8 @@ if __name__ == '__main__':
                         help='Number of parallel jobs (default: all available cores)')
     parser.add_argument('--seed', type=int, default=0,
                         help='Seed for the per-repetition seeds (default: 0)')
-    parser.add_argument('--output', type=str, default=fig_name('de_test_plot'),
-                        help='Output file for the plot (default: de_test_plot.png)')
+    parser.add_argument('--output', type=str, default=str(results_dir(__file__) / fig_name('de_test_plot')),
+                        help='Output file for the plot (default: kidney/results/de_test_plot.pdf)')
     parser.add_argument('--results_file', type=str, default=None,
                         help='Output file for results CSV (default: auto-generated from output name)')
     args = parser.parse_args()

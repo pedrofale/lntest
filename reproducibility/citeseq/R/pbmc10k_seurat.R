@@ -1,6 +1,5 @@
 rm(list=ls())
 library(data.table)
-library(ggplot2)
 library(glue)
 library(Seurat)
 library(tidyverse)
@@ -8,31 +7,10 @@ library(xtable)
 
 # Paths are relative to this script's directory (citeseq/R/), which is what
 # ZILN.Rproj sets as the R working directory. The arm's committed input lives in
-# citeseq/data/; everything this chain produces goes to output/citeseq/, which
-# is gitignored. citeseq/results/ keeps the committed June outputs.
+# citeseq/data/; everything this chain produces goes to citeseq/results/.
 data_dir <- "../data/"
-results_dir <- "../../output/citeseq/"
-# Figures are PDF, matching reproducibility/paths.py on the Python side.
-# LNTEST_FIG_FORMAT overrides the extension for a run.
-fig_ext <- Sys.getenv("LNTEST_FIG_FORMAT", "pdf")
-fig_name <- function(stem) paste0(sub("\\.(png|pdf|eps|svg|jpe?g|tiff?)$", "", stem, ignore.case = TRUE), ".", fig_ext)
-
-# ggsave, but with the PDF timestamp pinned so repeated runs are byte-identical.
-# R's pdf device ignores SOURCE_DATE_EPOCH; the replacement keeps byte offsets.
-ggsave <- function(filename, ...) {
-  ggplot2::ggsave(filename, ...)
-  if (grepl("\\.pdf$", filename)) {
-    x <- readBin(filename, "raw", file.info(filename)$size)
-    for (key in c("CreationDate", "ModDate")) {
-      for (at in grepRaw(paste0("/", key, " \\(D:[0-9]{14}"), x, all = TRUE)) {
-        start <- at + nchar(key) + 5
-        x[start:(start + 13)] <- charToRaw("19700101000000")
-      }
-    }
-    writeBin(x, filename)
-  }
-  invisible(filename)
-}
+results_dir <- "../results/"
+# No figures are drawn in R: citeseq/plots.py draws them from the CSVs this chain writes.
 
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -63,10 +41,6 @@ for (rep_no in replicates)
   results_dt <- data.table(gene_names = rownames(results), 
                            seurat_lfc = results$avg_log2FC)
   merged <- merge(true_lfcs_dt, results_dt, by="gene_names")
-  pl <- ggplot(merged, aes(true_lfcs, seurat_lfc)) + 
-    geom_point() + 
-    geom_abline(slope=1, intercept=0, color="red", linetype="dashed")
-  ggsave(fig_name(glue("{data_path}/seurat_lfc_plot.png")), pl)
   saveRDS(merged, glue("{data_path}/seurat_lfc_results.rds"))
   lfc_results[[(rep_no+1)]] <- merged
 }
@@ -75,11 +49,8 @@ lfc_results_dt <- rbindlist(lfc_results, idcol = TRUE)
 lfc_results_dt$rep <- lfc_results_dt$.id - 1
 saveRDS(lfc_results_dt, paste0(results_dir, "seurat_lfc_results.rds"))
 
-pl <- ggplot(lfc_results_dt, aes(true_lfcs, seurat_lfc)) + 
-  geom_point() +
-  geom_abline(slope=1, intercept=0, color="red", linetype="dashed")
-pl
-ggsave(fig_name(glue("{results_dir}CITE_seq_seurat_lfc_plot.png")), pl)
+# The same table as CSV, for the Seurat LFC figures (citeseq/plots.py).
+fwrite(lfc_results_dt, paste0(results_dir, "seurat_lfc_results.csv"))
 
 # Look at one specific replicate to see why Seurat's LFC is worse.
 rep_no <- 2

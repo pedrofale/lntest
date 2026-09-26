@@ -3,15 +3,13 @@ import sys
 import numpy as np
 import pandas as pd
 
-from paths import fig_name, require_input
-from method_colors import method_color
+from paths import fig_name, require_input, results_dir
+import plot_style
+from method_colors import method_color, method_draw_order, method_label, method_order
 import matplotlib.pyplot as plt
 import argparse
 
-# Use matplotlib's built-in math rendering (doesn't require LaTeX)
-plt.rcParams['text.usetex'] = False
-plt.rcParams['mathtext.fontset'] = 'cm'  # Computer Modern style
-plt.rcParams['font.family'] = 'serif'
+plot_style.use()
 
 
 def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None,
@@ -39,26 +37,12 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None,
         source="run `python -m kidney.umi_null` first",
     ))
     
-    # Map method names to LaTeX-friendly names
-    method_mapping = {
-        'DELN': r"LN's $t$-test",
-        'LN_test': r"LN's $t$-test",
-        'Scanpy t-test': r'$t$-test',
-        'Scanpy wilcoxon': 'Wilcoxon'
-    }
-    
-    # Apply method name mapping
-    df['method_display'] = df['method'].map(method_mapping).fillna(df['method'])
-    
-    # Get unique methods
-    methods = df['method_display'].unique()
+    df['method_display'] = df['method'].map(method_label)
+    methods = method_draw_order(df['method_display'])
     p_values = sorted(df['p'].unique())
-    
-    # Create color map
-    method_colors = {method: method_color(method) for method in methods}
-    
+
     # Create the plot
-    fig, ax = plt.subplots(1, 1, figsize=(10, 6))
+    fig, ax = plt.subplots(1, 1, figsize=plot_style.figsize())
     
     # Plot each method
     # Use raw FPR values and plot on log scale to avoid epsilon capping issues
@@ -92,23 +76,22 @@ def plot_fpr_results(csv_file, output_file, aspect_ratio=1.0, title_suffix=None,
         
         ax.errorbar(p_vals, fpr_means_log10, 
                    yerr=[yerr_lower, yerr_upper], 
-                   marker='o', capsize=5, capthick=2, label=method, 
-                   color=method_colors[method], linewidth=2, markersize=6)
+                   label=method, 
+                   color=method_color(method), **plot_style.ERRORBAR)
     
     # Prepare title text
     title = f'FPR vs {p_label}'
     if title_suffix:
         title = f'{title} {title_suffix}'
     
-    ax.set_xlabel(f'{p_label} $p$', fontsize=18)
-    ax.set_ylabel(r'$\log_{10}(\mathrm{FPR})$', fontsize=18)
-    ax.set_title(title, fontsize=16, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc='upper right', fontsize=16)
-    ax.tick_params(axis='both', which='major', labelsize=16)
+    ax.set_xlabel(f'{p_label} $p$')
+    ax.set_ylabel(r'$\log_{10}(\mathrm{FPR})$')
+    ax.set_title(title)
+    ax.tick_params(axis='both', which='major')
     ax.set_aspect(aspect_ratio, adjustable='box')
-    
+
     plt.tight_layout()
+    plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -118,8 +101,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot FPR results from CSV file')
     parser.add_argument('--csv_file', type=str, required=True,
                         help='Input CSV file with FPR results')
-    parser.add_argument('--output', type=str, default=fig_name('fpr_plot'),
-                        help='Output file for the plot (default: fpr_plot.eps)')
+    parser.add_argument('--output', type=str, default=str(results_dir(__file__) / fig_name('fpr_plot')),
+                        help='Output file for the plot (default: kidney/results/fpr_plot.pdf)')
     parser.add_argument('--aspect_ratio', type=float, default=1.0,
                         help='Aspect ratio for the plot (default: 1.0)')
     parser.add_argument('--title_suffix', type=str, default=None,

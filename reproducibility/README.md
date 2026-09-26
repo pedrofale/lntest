@@ -13,7 +13,7 @@ python -m <arm>.<script>          # e.g. python -m synthetic_nb.small_test
 ```
 
 Not `python synthetic_nb/small_test.py`.
-The `-m` form puts the **working directory** on `sys.path`, so a script inside an arm can import the shared modules that sit beside the arms — `paths`, `method_colors`, `baselines`, `de_utils`, `evaluation_utils`, `utils_frozen` — with no `__init__.py`, no packaging file for `reproducibility/`, and no `sys.path` manipulation.
+The `-m` form puts the **working directory** on `sys.path`, so a script inside an arm can import the shared modules that sit beside the arms — `paths`, `method_colors`, `plot_style`, `baselines`, `de_utils`, `evaluation_utils`, `utils_frozen` — with no `__init__.py`, no packaging file for `reproducibility/`, and no `sys.path` manipulation.
 Running a script by path puts *its own directory* on `sys.path` instead, and the shared imports fail.
 
 **Notebooks are the exception.** Run a notebook from the arm directory that contains it; each does `sys.path.append('../')` in its first cell to reach the same shared modules.
@@ -40,6 +40,25 @@ This affects the clustering, celltype and lymph node arms. R itself is fine — 
 **Figures are written as PDF.** Every plotting entry point in this tree routes its filename
 through `paths.fig_name`, which forces the extension. Set `LNTEST_FIG_FORMAT` to override for a
 run (`LNTEST_FIG_FORMAT=png python -m theory.concave_ordering`).
+
+**Every figure names, orders and sizes things the same way.**
+`method_colors.py` holds each method's colour, its display name and its position:
+LN's $t$-test, log1p $t$-test, Wilcoxon, MAST, listed in legends in that order whatever label an
+arm's results use ("DELN", "LN test", "Scanpy t-test (log1p)", ...). Where methods overlap,
+LN's $t$-test is drawn last, so its data sits on top.
+`plot_style.py` holds the text sizes: 8 pt labels, ticks and titles, 6 pt legends, at a panel of
+about 2.6 x 2.2 in, so each figure is drawn at roughly its printed size and its text matches the
+others when included unscaled. One font (matplotlib's default sans) and no bold titles; means
+with error bars share one marker and bar weight (`plot_style.ERRORBAR`).
+Axes have tick marks, light grid lines (horizontal only on box plots, whose x-axis is categorical)
+and no top or right spine; an axes with more than 5,000 dots has them rasterized
+(`plot_style.rasterize_dense`), everything else stays vector. Legends have no frame, sit
+outside the axes (`plot_style.legend_outside`), appear once per figure however many panels it
+has, and carry a title only when a second key needs telling apart.
+Box plots use the method colours with plain black medians, show every observation as a point
+(`plot_style.strip`) and draw no outline around the boxes; axes say FPR, TPR and DEGs.
+**No figure is drawn in R**: the R scripts write what they would have plotted to CSV, and
+`citeseq/plots.py` draws it.
 
 The tree used to emit a mix of `.eps` and `.png`, and four scripts hardcoded `format='eps'` in the
 `savefig` call, so `--output x.png` produced PostScript named `.png`. Those are gone; the filename
@@ -116,7 +135,7 @@ refuses to overwrite a file whose digest does not match rather than silently rep
 
 ```bash
 python -m fetch_data --arm citeseq          # 30 MB raw 5' PBMC 10k matrix
-cd citeseq/R && Rscript pbmc10k_process.R   # ~17 s -> results/pbmc10k_cd4_memory.rds
+cd citeseq/R && Rscript pbmc10k_process.R   # ~17 s -> results/pbmc10k_cd4_memory.rds, adt_gating.csv
 Rscript pbmc10k_to_h5ad.R                   # ~2 min -> data/memory_CD4.h5ad
 ```
 
@@ -150,14 +169,15 @@ python -m synthetic_nb.de_ratio        # both settings: the five metrics against
 python -m synthetic_nb.latex_tables    # formats the sparse CSV as a LaTeX table
 python -m synthetic_nb.null            # ~35 s; base_mu 50 by default
 python -m synthetic_nb.null --base-mu 5
-python -m synthetic_nb.null_ratio      # one figure per sweep, against Var(Y)/Var(X)
+python -m synthetic_nb.null --base-mu 5 --plot-only   # redraw from the sweep's CSV
+python -m synthetic_nb.null_ratio      # both sweeps side by side, against Var(Y)/Var(X)
 python -m synthetic_nb.lfc_confidence_intervals
 ```
 
 `null.py` samples a grid of variance ratios by default: Var(X) is 1, 2, 4 and 8 times the mean (1 is Poisson), and Var(Y)/Var(X) runs from 1 to 16 in quarter-octave steps.
 Ratios below 1 would repeat the same settings with the groups swapped: both tests are two-sided and the groups are the same size.
 Its outputs carry a `_ratio_grid` suffix.
-`--grid dispersion` is the grid behind RECOMB Fig 1 — the same 20 values of Var(Y) for every Var(X) — and writes the unsuffixed `variance_vs_fpr_mu{5,50}.*` that `output/reference/synthetic_nb/` checksums.
+`--grid dispersion` is the grid behind RECOMB Fig 1 — the same 20 values of Var(Y) for every Var(X) — and writes the unsuffixed `variance_vs_fpr_mu{5,50}.*` that `synthetic_nb/results/checksums.sha256` checksums.
 
 `small_test.py` reproduces **one** run of a table averaged over 20; its numbers are not expected to match the paper exactly.
 `de_test.py`'s `sparse` setting has RECOMB Table 2's design and its `dense` setting Table 1's, without the batch effect both tables were run with and the paper does not describe: the first half of each group's cells had every mean multiplied by e.
@@ -167,24 +187,28 @@ The NB parameters behind the paper's table are not captured in any config: the s
 ### `citeseq` — CITE-seq, surface protein as ground truth
 
 ```bash
-python -m citeseq.exp                  # writes to output/citeseq/
+python -m citeseq.exp                  # writes to citeseq/results/
+cd citeseq/R && Rscript pbmc10k_metrics.R && cd ../..   # the metrics table, CITE_seq_metrics.tex
+python -m citeseq.plots                # every CITE-seq figure, from the CSVs above and the R chain's
 ```
 
 The R stages that build `memory_CD4.h5ad` from the raw 10x download are in `citeseq/R/`, run with `Rscript`.
 The committed `memory_CD4.h5ad` means you do not need them unless you are rebuilding from raw.
 `citeseq/R/pbmc10k_seurat.R` generates Seurat LFC estimates that **were not used in the paper**, because they did not affect the conclusion; it is kept for provenance.
+It writes `seurat_lfc_results.csv`, and `citeseq.plots` draws the Seurat figures only when that file exists.
+Until 2026-09-26 `exp.py` wrote the replicates for it truncated to integers, so Seurat saw different counts from the other methods; on the same counts its `avg_log2FC`, the log of the mean normalized expression, tracks the true LFC as closely as LN's.
 
 ### `clustering` — PBMC3k, clustering resolution sweep
 
 ```bash
-python -m clustering.de      --config clustering/config.yaml --output-dir output/clustering
+python -m clustering.de      --config clustering/config.yaml --output-dir clustering/results
 
 # metrics and plots do NOT read --output-dir to find their input. Point them at
 # what the previous stage wrote, or they fail / silently do nothing. See below.
-sed 's|^adata_path:.*|adata_path: "output/clustering/pbmc3k_filtered_gene_bc_matrices_DE.h5ad"|' \
+sed 's|^adata_path:.*|adata_path: "clustering/results/pbmc3k_filtered_gene_bc_matrices_DE.h5ad"|' \
     clustering/config.yaml > .metrics_config.yaml          # gitignored, see .gitignore
-python -m clustering.metrics --config .metrics_config.yaml --output-dir output/clustering
-python -m clustering.plots   --metrics-dir output/clustering/metrics --config clustering/config.yaml
+python -m clustering.metrics --config .metrics_config.yaml --output-dir clustering/results
+python -m clustering.plots   --metrics-dir clustering/results/metrics --config clustering/config.yaml
 ```
 
 Run them in that order, and **pass `--skip-mast`** (it still needs `R_HOME` — the flag does not avoid
@@ -218,7 +242,7 @@ Two wiring defects to know about, both found by running it:
   `avg_jaccard_top20_by_resolution`, is a panel in the Nature submission. Always pass
   `--config clustering/config.yaml`.
 - **`plots --metrics-dir` wants the `metrics` directory itself**, not the output root — its `--help`
-  says `e.g. output/metrics`. Given the output root it finds no CSVs, prints
+  says `e.g. clustering/results/metrics`. Given the output root it finds no CSVs, prints
   `(No recall_matrix_*.csv files found; skipping ...)`, reports `Plots complete!`, **exits 0 and
   writes nothing**. Figures default to a `figures/` sibling of `--metrics-dir`, which is where the
   reference manifest expects them.
@@ -233,7 +257,7 @@ by the metric CSVs underneath them, which do match exactly.
 ### `celltype` — Kang 2018 cell types
 
 ```bash
-python -m celltype.de --config celltype/config.yaml --output-dir output/celltype
+python -m celltype.de --config celltype/config.yaml --output-dir celltype/results
 ```
 
 `celltype/kang_markers.ipynb` produces the committed marker CSVs in `celltype/results/`.
@@ -252,29 +276,41 @@ Took ~9 min on an M-series laptop; produces 161 capsules over 18,085 genes, whic
 `main_recomb25.tex` reports for this dataset.
 
 ```bash
-python -m kidney.umi_null   --n_cells_remove 35 --n_reps 10000
-python -m kidney.umi_de     --n_cells_remove 35 --q 0.005 --lfc 3 --p_min 0.125 --n_reps 10000
-python -m kidney.fpr_plots        --csv_file <umi_null results.csv>
-python -m kidney.umi_de_plots     --input <umi_de results.csv> --output de.eps
+python -m kidney.umi_null --n_cells_remove 35 --n_reps 10000 --output kidney/results/fdr_results_35.pdf
+python -m kidney.umi_de   --n_cells_remove 35 --q 0.005 --lfc 3 --p_min 0.125 --n_reps 10000 \
+    --output kidney/results/DE_plot_lfc3.pdf
+python -m kidney.fpr_plots --csv_file kidney/results/fdr_results_35_results.csv \
+    --output kidney/results/fdr_results_35.pdf --aspect_ratio 0.1 --title_suffix '-no DEGs'
+python -m kidney.umi_de_plots --input kidney/results/DE_plot_lfc3_results.csv \
+    --output kidney/results/DE_plot_lfc3.pdf --title_suffix '-with DEGs'
 ```
 
 Spot splitting, behind the two kidney panels both manuscripts show (`2um_nodeg_fpr`,
 `withdeg_2um_100rep_with_auc_lfc3_pretty_plot_summary`). About 4 minutes per run on a 16 GB laptop, 8 workers:
 
 ```bash
-python -m kidney.spot_split --n_shape_ids_remove 0 --n_reps 100 --output output/kidney/2um_nodeg.pdf
+python -m kidney.spot_split --n_shape_ids_remove 0 --n_reps 100 --output kidney/results/2um_nodeg.pdf
 python -m kidney.spot_split --n_shape_ids_remove 0 --q 0.005 --lfc 3 --n_reps 100 \
-    --output output/kidney/withdeg_2um_100rep_with_auc_lfc3.pdf
-python -m kidney.fpr_plots --csv_file output/kidney/2um_nodeg_results.csv \
-    --output output/kidney/2um_nodeg_fpr.pdf --aspect_ratio 0.045 \
+    --output kidney/results/withdeg_2um_100rep_with_auc_lfc3.pdf
+python -m kidney.fpr_plots --csv_file kidney/results/2um_nodeg_results.csv \
+    --output kidney/results/2um_nodeg_fpr.pdf --aspect_ratio 0.045 \
     --title_suffix '-no DEGs' --p_label 'Split probability'
 python -m kidney.spot_split_plots \
-    --csv_file output/kidney/withdeg_2um_100rep_with_auc_lfc3_results.csv \
-    --json_file output/kidney/withdeg_2um_100rep_with_auc_lfc3_pr_curve_data.json \
-    --output_prefix output/kidney/withdeg_2um_100rep_with_auc_lfc3_pretty_plot
+    --csv_file kidney/results/withdeg_2um_100rep_with_auc_lfc3_results.csv \
+    --json_file kidney/results/withdeg_2um_100rep_with_auc_lfc3_pr_curve_data.json \
+    --output_prefix kidney/results/withdeg_2um_100rep_with_auc_lfc3_pretty_plot
 ```
 
 `spot_split` draws no figure; its `--output` only names the results files.
+
+The capsule figure — every capsule outlined on the H&E, and one capsule's 2 µm spots split at
+p = 0.5, 0.3 and 0.1 on the full-resolution image — replaces RECOMB's hand-composited
+`podocytes.png`. It needs the 4.3 GB full-resolution H&E (`kidney-he-fullres` in `data_sources.yaml`):
+
+```bash
+python -m fetch_data --arm kidney          # includes the full-resolution H&E
+python -m kidney.capsule_figure            # ~3 s -> kidney/results/capsule_split_illustration.pdf
+```
 
 **These parameters come from the manuscript, not from the code.** `--n_cells_remove`, `--q` and
 `--lfc` are `required=True` with no defaults, so nothing in this repository records what was run;
@@ -330,7 +366,8 @@ bash lymphnode/reproduce_vishd_cluster1_cluster3.sh
 Then:
 
 ```bash
-python -m lymphnode.subsampling --config lymphnode/config_50rep.yaml --output-dir output/lymphnode
+python -m lymphnode.subsampling --config lymphnode/config_50rep.yaml --output-dir lymphnode/results
+python -m lymphnode.subsampling --config lymphnode/config_50rep.yaml --output-dir lymphnode/results --plot-only  # redraw figures from the CSV
 python -m lymphnode.ln_de_vs_rest   --input <h5ad> --output de.csv
 python -m lymphnode.cluster_de_gsea --input <h5ad> --output_de de.csv --output_gsea gsea.csv
 ```
@@ -341,6 +378,7 @@ python -m lymphnode.cluster_de_gsea --input <h5ad> --output_de de.csv --output_g
 python -m theory.mean_ci_coverage    # ~1 s
 python -m theory.lfc_ci_coverage
 python -m theory.concave_ordering    # ~1 s
+python -m theory.log1p_toy           # ~1 s; equal means, unequal log1p means (was notebooks/toy.ipynb)
 ```
 
 These are exempt from depending on `lntest` — being readable in one file, with the algebra inline, matters more here.
@@ -352,10 +390,11 @@ The exemption is on the *code*, not the maths: where the manuscript prints a for
 
 ## Outputs and reference values
 
-Results belong in `output/`, which is gitignored: `output/clustering/`, `output/lymphnode/` and
-`output/citeseq/`. The synthetic NB and theory arms write to their own `results/`, whose outputs git ignores.
-**Figures, tables and checksums are not committed** — `.gitignore` excludes `*.pdf`, `*.csv`, `*.tex`
-and `*.sha256`; files that were already tracked stay tracked.
+Every arm writes to its own `results/`, beside its scripts: `kidney/results/`, `lymphnode/results/`,
+`clustering/results/`, `citeseq/results/`, `celltype/results/`, `synthetic_nb/results/`, `theory/results/`.
+Each also holds `logs/` from its last run and `archive/<run>/` for earlier runs kept for comparison.
+**Nothing new under `*/results/` is committed**: `.gitignore` ignores those directories, and only the
+nine files tracked before that rule stay tracked (below).
 
 **Every gene-wise test is corrected with Benjamini-Hochberg**, scanpy's default, for every method, and
 each call site says so explicitly rather than inheriting a default. Until 2026-09-24 LN was corrected
@@ -367,35 +406,36 @@ gene-wise, across gene sets in `lymphnode/gsea_utils.py`, was BH throughout.
 2026-09-24 and checked file by file, with LN's trigamma as psi_1(a) = 1/a. Three things make that
 hold, and each is easy to undo by accident:
 
-- PDFs carry a timestamp unless pinned. `paths.py` sets `SOURCE_DATE_EPOCH` for matplotlib; the R
-  scripts rewrite the date after `ggsave`, because R's PDF device ignores that variable.
+- PDFs carry a timestamp unless pinned. `paths.py` sets `SOURCE_DATE_EPOCH` for matplotlib, which
+  draws every figure.
 - `clustering/plots.py` seeds the global RNG before each stripplot, which is where seaborn draws its jitter.
 - `lymphnode/subsampling.py` sorts its results before writing, because workers finish in any order.
 
 The exceptions: `lymphnode/de_time_s_vs_subsampling.pdf`, the `de_time_s` columns of the lymph node CSVs,
 and a timing field in its metadata JSON.
 
-The checksums of the current outputs live in `output/reference/`, outside git; verify one with
-`shasum -a 256 -c output/reference/<arm>/checksums.sha256`. The committed `reference/` holds the
+The checksums of the current outputs are in each arm's `results/checksums.sha256`, outside git; verify one
+with `shasum -a 256 -c <arm>/results/checksums.sha256`. The committed `reference/` holds the
 June 2026 manifests, which pin the run behind the published PBMC3k and CITE-seq figures.
 
 | Manifest | Files |
 |---|---|
-| `output/reference/clustering/` | 68 metric CSVs, 22 figures |
-| `output/reference/citeseq/` | metrics, per-gene results, LaTeX table, 102 figures |
-| `output/reference/kidney/` | the spot-split results CSVs, PR-curve JSON and six figures; the UMI arms are not yet run |
-| `output/reference/lymphnode/` | 28 figures (the CSVs carry wall-clock columns, so compare them by value) |
-| `output/reference/synthetic_nb/` | the two variance sweeps (`null --grid dispersion`) and three dispersion boxplots |
-| `output/reference/theory/` | two figures, two CSVs |
+| `clustering/results/checksums.sha256` | 68 metric CSVs, 22 figures |
+| `citeseq/results/checksums.sha256` | metrics, per-gene results, LaTeX table, 102 figures |
+| `kidney/results/checksums.sha256` | all 13 outputs, spot splitting and UMI downsampling |
+| `lymphnode/results/checksums.sha256` | 28 figures (the CSVs carry wall-clock columns, so compare them by value) |
+| `synthetic_nb/results/checksums.sha256` | the two variance sweeps (`null --grid dispersion`) and three dispersion boxplots |
+| `theory/results/checksums.sha256` | three figures, two CSVs |
 
 `reference/unattributed/` holds two `.npy` files no script reads. Read `PROVENANCE.md` before assuming anything about them.
 
-The regenerated manuscript panels are staged under `output/manuscript_figures/`, with Overleaf paths
-and a README of what each one is. Reaching the paper is a manual upload.
-Earlier outputs are kept in `output/archive/`: `june_bh` and `bh_2026-09-24` (Bonferroni LN against BH
-baselines) and `bonferroni_2026-09-25` (Bonferroni for every method).
+Getting a figure into the paper is a manual copy from the arm's `results/`, under the file name its
+`\includegraphics` expects. Earlier runs are in `<arm>/results/archive/`: `june_bh` and
+`stale_2026-09-11` (clustering), `bh_2026-09-24` (Bonferroni LN against BH baselines) and
+`bonferroni_2026-09-25` (Bonferroni for every method). `output/` now holds only scratch from earlier
+verification sessions.
 
-**Re-running an arm can overwrite committed files.** Nine tracked files live under `*/results/` rather than `output/`:
+**Nine tracked files live under `*/results/`**, committed before results were ignored:
 
 ```
 celltype/results/kang_{B,T}_markers.csv
@@ -405,7 +445,9 @@ citeseq/results/CD{3,4,45RA}_density_plot.pdf
 synthetic_nb/results/de_metrics_mu10_nobatch.csv
 ```
 
-The CITE-seq arm used to write straight over its tracked CSVs; it now writes to `output/citeseq/`, and the tracked files keep the June outputs. Check `git status` after any run all the same.
+`citeseq/exp.py` writes the two CSVs, so a run replaces the June versions in the working tree and
+`git status` shows them; `git checkout` restores them. Under BH, `CITE_seq_metrics.csv` comes back
+byte-identical to the June file, which was BH for all three methods.
 
 ## The equivalence harness
 
@@ -421,7 +463,6 @@ It exists because the arms were migrated onto `lntest` one at a time and somethi
 ## Known gaps
 
 - **Nothing here has a test suite.** `small_test.py` is a reviewer-facing single run, explicitly not expected to match the submission.
-- **`theory/concave_ordering.py`, `theory/lfc_ci_coverage.py` and `synthetic_nb/null.py` call `plt.show()` and save nothing.** Run them in a notebook, or add a `savefig`; headless they complete and produce no file.
 - **The kidney arm's subsampling parameters were never recorded in code.** `--n_cells_remove`, `--q` and `--lfc` are required arguments with no defaults and no config, so the only record of what produced the published panels is the manuscript prose. Recovered 2026-09-24 and written into the command block above; `spot_split`'s capsule filter has no stated value anywhere.
 - **The kidney arm's published spot-split panel has unclear provenance.** `spot_split.py` defaulted to the per-capsule aggregate, whose `shape_id` is an index rather than a column, so its own guard raised `ValueError` before doing any work. The default now points at `podocytes_2um.h5ad`, per this repository's own top-level README, but which file produced the published figure is an open question.
 - **`celltype/config.yaml` names an input that cannot satisfy it.** It asks for
@@ -435,5 +476,5 @@ It exists because the arms were migrated onto `lntest` one at a time and somethi
   rejections / FPR 0.00304; running it gives 21 / 0.00638. The notebook was last executed 2024-11-06 and
   the estimator changed nineteen times after that, so its outputs are stale rather than wrong — 21 is what
   the frozen RECOMB-era estimator gives. See question 9 of the vault's math-questions handoff.
-- **The kidney UMI-downsampling sweeps have not been run end to end here.** Both spatial arms' inputs are built, and the lymph node arm and the kidney spot-split panels have run (2026-09-24, 2026-09-25); `umi_null` and `umi_de` at 10,000 replicates have not.
+- **Both spatial arms have now run end to end here** (lymph node 2026-09-24; kidney 2026-09-25, where the two UMI sweeps take about 1.3 hours each on 8 cores of a laptop). Two results were ever tied to printed numbers: the kidney full-depth counts, and the lymph node Jaccard values, which matched under the old mixed correction (Bonferroni LN, BH baselines) and do not under BH for every method.
 - **The trigamma question is settled.** `lntest` has one trigamma difference, `trigamma_diff(a, n) = 1/a - 1/n`, and no flag to select another. That is the form the paper defines — `psi_1(z) = 1/z`, at `nature_submission/sections/methods.tex:79-83` — and the form every published result came from. Nothing in this tree asks for a trigamma any more, because there is nothing to ask for.

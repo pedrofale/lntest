@@ -16,13 +16,14 @@ Signature-set-independent metrics:
     - n_sig_genes_by_resolution.csv
 
 Usage:
-    python plot_clustering_metrics.py --metrics-dir output/metrics [--config config.yaml]
+    python plot_clustering_metrics.py --metrics-dir clustering/results/metrics [--config config.yaml]
 
 If config.yaml is provided, cell type marker order and method name mapping can be inferred for nicer plots.
 """
 
 import argparse
 import os
+import textwrap
 import yaml
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -31,7 +32,8 @@ import numpy as np
 import seaborn as sns
 
 from paths import fig_name
-from method_colors import MEDIANPROPS, method_color
+import plot_style
+from method_colors import MEDIANPROPS, method_color, method_label, method_order
 
 def load_config(config_path):
     """Load configuration from YAML file, if present."""
@@ -47,7 +49,7 @@ def main():
     )
     parser.add_argument(
         '--metrics-dir', type=str, required=True,
-        help='Directory containing metric CSV files (e.g. output/metrics)'
+        help='Directory containing metric CSV files (e.g. clustering/results/metrics)'
     )
     parser.add_argument(
         '--config', type=str, required=False,
@@ -76,18 +78,8 @@ def main():
         resolution_keys = None
     top_genes = config.get('top_genes', 10)
 
-    # Map raw method ids and labels to display labels (idempotent for labels).
-    method_labels = {
-        "LN test": "LN test",
-        "Scanpy t-test (log1p)": "Scanpy t-test (log1p)",
-        "Scanpy Wilcoxon (log1p)": "Scanpy Wilcoxon (log1p)",
-        "ln": "LN test",
-        "t_test": "Scanpy t-test (log1p)",
-        "wilcoxon": "Scanpy Wilcoxon (log1p)",
-    }
-
     os.makedirs(output_dir, exist_ok=True)
-    sns.set(style="whitegrid")
+    plot_style.use()
 
     # Signature sets to plot: top-N significant genes and all significant genes.
     top_tag = f"top{top_genes}"
@@ -103,12 +95,7 @@ def main():
     df_lfc = _read("avg_lfc_by_resolution.csv")
     df_nsig = _read("n_sig_genes_by_resolution.csv")
 
-    # Derive method order from any available jaccard summary.
     ref = _read(f"avg_jaccard_{top_tag}_by_resolution.csv")
-    if ref is not None and "method" in ref.columns:
-        method_order = ref["method"].unique().tolist()
-    else:
-        method_order = ["LN test", "Scanpy t-test (log1p)", "Scanpy Wilcoxon (log1p)"]
 
     def _resolution_order(df):
         if resolution_keys:
@@ -138,63 +125,66 @@ def main():
     }
 
     def resolution_label(rk):
-        """Map a resolution key (e.g. "leiden_verylow") to "Very low (2 clusters)"."""
+        """Map a resolution key (e.g. "leiden_verylow") to "Very low\n(2 clusters)"."""
         rk = str(rk)
         token = rk[len("leiden_"):] if rk.startswith("leiden_") else rk
         name = _pretty_res.get(token, token.replace("_", " ").capitalize())
         n = n_clusters_by_res.get(rk)
-        return f"{name} ({n} clusters)" if n is not None else name
+        return f"{name}\n({n} clusters)" if n is not None else name
 
-    def boxplot(df, ycol, ylabel, title, fname, legend_loc="upper right"):
+    def boxplot(df, ycol, ylabel, title, fname):
         """Boxplot + stripplot of `ycol` grouped by resolution and method."""
         if df is None or ycol not in df.columns:
             return
         df = df.copy()
         df["resolution"] = df["resolution"].astype(str)
-        # Hue order: configured methods first, then any extras (e.g. actual-LFC series).
-        present = list(df["method"].unique())
-        hue_order = [m for m in method_order if m in present]
-        hue_order += [m for m in present if m not in hue_order]
-        plt.figure(figsize=(10, 6))
+        df["method"] = df["method"].map(method_label)
+        hue_order = method_order(df["method"])
+        plt.figure(figsize=(5.6, 3.0))
         sns.boxplot(
             data=df, x="resolution", y=ycol, hue="method", showfliers=False,
             order=resolution_order, hue_order=hue_order,
             palette={m: method_color(m) for m in hue_order}, saturation=1,
             medianprops=MEDIANPROPS,
         )
+        for box in plt.gca().patches:
+            box.set_edgecolor("none")
         np.random.seed(0)  # seaborn's jitter draws from the global RNG
         sns.stripplot(
             data=df, x="resolution", y=ycol, hue="method", dodge=True, alpha=0.8,
-            palette={m: 'white' for m in hue_order}, edgecolor='k', linewidth=0.6,
-            zorder=10, size=4, order=resolution_order, hue_order=hue_order,
+            palette={m: method_color(m) for m in hue_order}, edgecolor='0.2', linewidth=0.4,
+            zorder=10, size=2, order=resolution_order, hue_order=hue_order,
         )
         ax = plt.gca()
         handles, labels = ax.get_legend_handles_labels()
         n = len(hue_order)
-        plt.legend(handles[:n], labels[:n], title="Method", loc=legend_loc)
+        for handle in handles[:n]:
+            handle.set_edgecolor("none")
+        plt.legend(handles[:n], labels[:n], loc="upper left",
+                   bbox_to_anchor=(1.01, 1.0), frameon=False, alignment="left")
         ax.xaxis.set_major_locator(mticker.FixedLocator(ax.get_xticks()))
-        ax.set_xticklabels([resolution_label(t.get_text()) for t in ax.get_xticklabels()],
-                           rotation=20, ha="right")
-        plt.ylabel(ylabel)
+        ax.set_xticklabels([resolution_label(t.get_text()) for t in ax.get_xticklabels()])
+        plt.ylabel(textwrap.fill(ylabel, 40))
         plt.xlabel("Clustering resolution")
         plt.title(title)
-        plt.grid(True, axis="y", alpha=0.3)
+        plot_style.boxplot_grid(plt.gca())
         plt.tight_layout()
-        plt.savefig(fig_name(os.path.join(output_dir, fname)), dpi=300, bbox_inches='tight')
+        plot_style.rasterize_dense(plt.gcf())
+        plt.savefig(fig_name(os.path.join(output_dir, fname)), dpi=plot_style.RASTER_DPI, bbox_inches='tight')
         plt.close()
 
     # ---- Signature-set-independent boxplots ----
     print("> Plotting summary boxplots...")
     boxplot(
         df_lfc, "avg_abs_lfc_sig",
-        "Average |LFC| of significant DE genes per cluster (FDR < 0.05)",
-        "Average |LFC| of significant DE genes per cluster",
+        "Average |LFC| of significant DEGs per cluster (FDR < 0.05)",
+        "Average |LFC| of significant DEGs per cluster",
         "avg_lfc_by_resolution.png",
     )
     boxplot(
         df_nsig, "n_sig_genes",
-        "Number of significant DE genes per cluster (FDR < 0.05)",
-        "Number of significant DE genes per cluster",
+        "Number of significant DEGs per cluster (FDR < 0.05)",
+        "Number of significant DEGs per cluster",
         "n_sig_genes_by_resolution.png",
     )
 
@@ -216,13 +206,13 @@ def main():
             df_best, "best_recall",
             "Best-matching cluster recall of cell-type markers",
             f"Best-match recall of markers per cell type ({lab})",
-            f"best_recall_{tag}_by_resolution.png", legend_loc="upper left",
+            f"best_recall_{tag}_by_resolution.png",
         )
         boxplot(
             df_best, "best_jaccard",
             "Best-matching cluster Jaccard to cell-type markers",
             f"Best-match Jaccard per cell type ({lab})",
-            f"best_jaccard_{tag}_by_resolution.png", legend_loc="upper left",
+            f"best_jaccard_{tag}_by_resolution.png",
         )
 
     # ---- Per-method grouped heatmaps (Jaccard and recall), one figure per tag/method ----
@@ -276,7 +266,7 @@ def main():
                 else:
                     ordered = sorted(resmap)
                 mats = {rk: pd.read_csv(resmap[rk], index_col=0) for rk in ordered}
-                mlabel = method_labels.get(method, method)
+                mlabel = method_label(method)
 
                 if vmax_mode == "observed":
                     observed = max((float(m.values.max()) for m in mats.values()), default=1.0)
@@ -294,11 +284,11 @@ def main():
                         vmin=0.0, vmax=vmax, cbar=False,
                         xticklabels=mat.columns, yticklabels=mat.index,
                     )
+                    ax.tick_params(left=True, bottom=True, length=3.5)  # seaborn hides heatmap ticks
                     ax.set_title(resolution_label(rk))
                     ax.set_xlabel("Cell type marker")
                     ax.set_ylabel("Cluster")
-                    plt.setp(ax.get_xticklabels(), rotation=90, fontsize=8)
-                    plt.setp(ax.get_yticklabels(), fontsize=8)
+                    plt.setp(ax.get_xticklabels(), rotation=90)
 
                 sm = ScalarMappable(cmap="viridis", norm=Normalize(vmin=0.0, vmax=vmax))
                 fig.colorbar(sm, ax=list(axes), fraction=0.02, pad=0.02, label=cbar_label)
@@ -307,7 +297,6 @@ def main():
                 fig.suptitle(
                     f"{mlabel}: {metric_name} of cluster signatures to cell-type markers "
                     f"— {taglab}{scale_note}",
-                    fontsize=14,
                 )
                 savepath = fig_name(os.path.join(output_dir, f"{out_prefix}_{tag}_{method}"))
                 fig.savefig(savepath, dpi=200, bbox_inches="tight")

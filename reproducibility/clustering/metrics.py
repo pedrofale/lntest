@@ -5,11 +5,11 @@ Script to compute clustering metrics (no DE performed in this script).
 This script expects an AnnData file that already contains precomputed 
 differential expression (DE) results for multiple clustering resolutions and DE methods.
 It computes and saves cluster-level and cell-type level metrics (Jaccard indices, 
-number of significant DE genes, average |LFC|, etc) as CSV files in an output folder.
+number of significant DEGs, average |LFC|, etc) as CSV files in an output folder.
 Uses evaluation_utils for all metrics.
 
 Usage:
-    python compute_clustering_metrics.py --config config.yaml [--output-dir output/]
+    python compute_clustering_metrics.py --config config.yaml [--output-dir clustering/results/]
 """
 
 import argparse
@@ -19,7 +19,7 @@ import yaml
 import numpy as np
 import pandas as pd
 
-from paths import require_input
+from paths import require_input, results_dir
 import scanpy as sc
 
 # Run from reproducibility/ as `python -m clustering.metrics`, which puts that
@@ -55,8 +55,8 @@ def main():
         '--config', type=str, required=True, help='Path to YAML configuration file'
     )
     parser.add_argument(
-        '--output-dir', type=str, default='output',
-        help='Base output directory; metric CSVs are written to its "metrics" subfolder (default: output)'
+        '--output-dir', type=str, default=str(results_dir(__file__)),
+        help='Base output directory; metric CSVs are written to its "metrics" subfolder (default: clustering/results)'
     )
     parser.add_argument(
         '--skip-plots', action='store_true',
@@ -107,7 +107,7 @@ def main():
                     adata, cluster, top_n=top_genes, key=method_key, pval_threshold=0.05
                 )
 
-    # 2. All significant DE genes (padj < 0.05)
+    # 2. All significant DEGs (padj < 0.05)
     all_sig_cluster_signatures = dict()
     for method in de_methods:
         all_sig_cluster_signatures[method] = dict()
@@ -199,8 +199,8 @@ def main():
         index=False
     )
 
-    # ---------- Metric 5: Number of significant DE genes (via evaluation_utils) ----------
-    print("Computing number of significant DE genes per cluster ...")
+    # ---------- Metric 5: Number of significant DEGs (via evaluation_utils) ----------
+    print("Computing number of significant DEGs per cluster ...")
     records = []
     for method in de_methods:
         for key in resolution_keys:
