@@ -4,16 +4,19 @@
 """
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 import numpy as np
 import pandas as pd
 from scipy.stats import gaussian_kde
 
 import plot_style
-from method_colors import method_color, method_label
+from method_colors import MEDIANPROPS, method_color, method_draw_order, method_label, method_order
 from paths import fig_name, require_input, results_dir
 
 RESULTS = results_dir(__file__)
 GATE_SHADES = {'-': '0.8', '+': '0.5', '++': '0.2'}
+# The metrics of the manuscript's metrics table (RECOMB Table 3), in its order, and FPR beside TNR
+TABLE_METRICS = {'accuracy': 'Accuracy', 'precision': 'Precision', 'tpr': 'TPR', 'tnr': 'TNR', 'fpr': 'FPR', 'f1': 'F1'}
 # Scanpy's and Seurat's log1p t-tests appear side by side here, so both are named by tool
 SCANPY_LOG1P = f"Scanpy {method_label('t-test')}"
 
@@ -45,7 +48,7 @@ def gating():
         ax.set_title(f'{marker} CLR distribution with GMM clustering')
         fig.tight_layout()
         plot_style.legend_outside(fig)
-        save(fig, f'{marker}_density_plot')
+        save(fig, f'gating_{marker.lower()}')
 
 
 def annotate_r2(ax, true_lfc, est):
@@ -81,8 +84,8 @@ def lfc():
     sig = res[res.is_signal_gene]
     panels = [(method_label('LN'), method_color('LN'), sig.ln_lfc),
               (SCANPY_LOG1P, method_color('t-test'), sig.scanpy_lfc)]
-    scatter_panels(sig.true_lfc, panels, 'CITE_seq_lfc_plot')
-    scatter_panels(sig.true_lfc, panels, 'CITE_seq_lfc_error_plot', error=True)
+    scatter_panels(sig.true_lfc, panels, 'lfc_vs_true')
+    scatter_panels(sig.true_lfc, panels, 'lfc_error', error=True)
 
     seurat_csv = RESULTS / 'seurat_lfc_results.csv'
     if not seurat_csv.exists():
@@ -99,7 +102,7 @@ def lfc():
     ax.set_ylabel('Estimated LFC')
     ax.set_title(method_label('seurat'))
     fig.tight_layout()
-    save(fig, 'CITE_seq_seurat_lfc_plot')
+    save(fig, 'lfc_vs_true_seurat')
 
     merged = res.rename_axis('gene_names').reset_index().rename(columns={'replicate': 'rep'}).merge(
         seurat[['gene_names', 'seurat_lfc', 'rep']], on=['gene_names', 'rep'])
@@ -107,11 +110,113 @@ def lfc():
     panels = [(method_label('LN'), method_color('LN'), merged.ln_lfc),
               (SCANPY_LOG1P, method_color('t-test'), merged.scanpy_lfc),
               (method_label('seurat'), method_color('seurat'), merged.seurat_lfc)]
-    scatter_panels(merged.true_lfc, panels, 'CITE_seq_lfc_plot_all_methods')
-    scatter_panels(merged.true_lfc, panels, 'CITE_seq_lfc_error_plot_all', error=True)
+    scatter_panels(merged.true_lfc, panels, 'lfc_vs_true_all_methods')
+    scatter_panels(merged.true_lfc, panels, 'lfc_error_all_methods', error=True)
+
+
+def ranking_curve(is_de, adj_p):
+    """Precision and recall down the ranking by adjusted p-value, and the area under the curve's upper
+    envelope; the kidney arm's definitions (kidney/spot_split.py, de_test_single)."""
+    score = -np.log10(np.clip(np.nan_to_num(adj_p, nan=1.0), 1e-300, 1.0))
+    hits = is_de[np.argsort(score)[::-1]]
+    tp = np.cumsum(hits)
+    precision = np.concatenate([[1.0], tp / np.arange(1, hits.size + 1)])
+    recall = np.concatenate([[0.0], tp / hits.sum()])
+    envelope = np.maximum.accumulate(precision[::-1])[::-1]
+    return precision, recall, np.trapz(envelope, recall)
+
+
+def box(ax, k, values, method, rng):
+    bp = ax.boxplot([values], positions=[k], widths=0.6, patch_artist=True, showfliers=False,
+                    medianprops=MEDIANPROPS)
+    bp['boxes'][0].set_facecolor(method_color(method))
+    bp['boxes'][0].set_edgecolor('none')
+    plot_style.strip(ax, k, values, method_color(method), 0.6, rng)
+
+
+def method_ticks(ax, methods):
+    """Method names under their boxes, "t-test" on a second line so neighbours do not touch."""
+    ax.set_xticks(range(len(methods)), [method_label(m).replace(' $t$', '\n$t$') for m in methods])
+
+
+def metrics():
+    """The metrics table as box plots: one panel per metric, one box per method, a point per replicate."""
+    df = pd.read_csv(require_input(RESULTS / 'CITE_seq_metrics.csv', what='per-replicate DE metrics',
+                                   source='python -m citeseq.exp'), index_col=0)
+    methods = method_order([c for c in df.columns if c != 'replicate'])
+    rng = np.random.default_rng(0)
+    fig, axes = plt.subplots(2, 3, figsize=plot_style.figsize(3, 2))
+    for ax, (key, name) in zip(axes.flat, TABLE_METRICS.items()):
+        rows = df.loc[key]
+        zero = plot_style.zero_row(rows[methods].to_numpy().ravel(), 0) if key == 'fpr' else None
+        for k, m in enumerate(methods):
+            values = rows[m].to_numpy()
+            box(ax, k, np.where(values > 0, values, zero) if zero else values, m, rng)
+        if zero:
+            plot_style.log_axis_with_zero(ax, zero, rows[methods].to_numpy().max())
+        method_ticks(ax, methods)
+        ax.set_ylabel(name)
+        plot_style.boxplot_grid(ax)
+    fig.tight_layout()
+    plot_style.legend_outside(fig, [Patch(facecolor=method_color(m)) for m in methods],
+                              [method_label(m) for m in methods])
+    save(fig, 'degs_metrics')
+
+
+def summary():
+    """The kidney with-DEG summary's panels for this experiment's single, balanced condition:
+    TPR and FPR at BH 0.05, PR-AUC, and the mean PR curves, over the replicates."""
+    res = pd.read_csv(require_input(RESULTS / 'CITE_seq_results.csv', what='per-gene results of every replicate',
+                                    source='python -m citeseq.exp'), index_col=0)
+    columns = {'LN': 'ln_adj_pvalue', 't-test': 't_adj_pvalue', 'Wilcoxon': 'w_adj_pvalue'}
+    methods = method_order(columns)
+    grid = np.linspace(0, 1, 101)
+    rows, curves = [], {m: [] for m in methods}
+    for _, d in res.groupby('replicate'):
+        is_de = d['is_signal_gene'].to_numpy(bool)
+        for m in methods:
+            adj_p = d[columns[m]].to_numpy()
+            called = adj_p < 0.05
+            precision, recall, area = ranking_curve(is_de, adj_p)
+            curves[m].append(np.interp(grid, recall, precision, left=precision[0], right=precision[-1]))
+            rows.append({'method': m, 'TPR': called[is_de].mean(), 'FPR': called[~is_de].mean(), 'PR-AUC': area})
+    df = pd.DataFrame(rows)
+
+    rng = np.random.default_rng(0)
+    fig, axes = plt.subplots(2, 2, figsize=plot_style.figsize(2, 2))
+    zero = plot_style.zero_row(df['FPR'], np.zeros(len(df)))
+    for ax, metric in zip(axes.flat[:3], ['TPR', 'FPR', 'PR-AUC']):
+        for k, m in enumerate(methods):
+            values = df.loc[df['method'] == m, metric].to_numpy()
+            box(ax, k, np.where(values > 0, values, zero) if metric == 'FPR' else values, m, rng)
+        method_ticks(ax, methods)
+        ax.set_ylabel(metric)
+        plot_style.boxplot_grid(ax)
+        if metric != 'FPR':
+            ax.set_ylim(0, 1)
+    plot_style.log_axis_with_zero(axes[0, 1], zero, df['FPR'].max())
+
+    ax = axes[1, 1]
+    for m in method_draw_order(methods):
+        c = np.array(curves[m])
+        mean, sd = c.mean(0), c.std(0)
+        ax.fill_between(grid, np.clip(mean - sd, 0, 1), np.clip(mean + sd, 0, 1), color=method_color(m),
+                        alpha=0.15, lw=0)
+        ax.plot(grid, mean, color=method_color(m), lw=1.3)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.set_xlabel('Recall')
+    ax.set_ylabel('Precision')
+    fig.tight_layout()
+    plot_style.legend_outside(fig, [Patch(facecolor=method_color(m)) for m in methods],
+                              [method_label(m) for m in methods])
+    save(fig, 'degs_summary')
+    return df
 
 
 if __name__ == '__main__':
     plot_style.use()
     gating()
     lfc()
+    metrics()
+    summary()
