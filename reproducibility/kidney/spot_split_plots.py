@@ -10,18 +10,19 @@ import json
 import matplotlib.pyplot as plt
 import argparse
 from matplotlib.lines import Line2D
+from kidney.fpr_plots import SAMPLING, SPLIT, p_axis
 plot_style.use()
 
-def method_and_p_legends(fig, methods, selected_p, linestyle_map):
+def method_and_p_legends(fig, methods, selected_p, linestyle_map, p_symbol=SPLIT):
     """Two keys right of the axes: colour is the method, line style the split probability."""
     plot_style.legend_outside(fig, [Line2D([0], [0], color=method_color(m), lw=1.3) for m in methods],
                               [method_label(m) for m in methods], title='Method')
     plot_style.legend_outside(fig, [Line2D([0], [0], color='black', lw=1.3, linestyle=linestyle_map[p])
                                     for p in selected_p],
-                              [f'{p:.3f}' for p in selected_p], title='Split probability $p$', y=0.6)
+                              [f'{p:.3f}' for p in selected_p], title=p_symbol, y=0.6)
 
 
-def plot_tpr_fpr_results(csv_file, output_file):
+def plot_tpr_fpr_results(csv_file, output_file, p_symbol=SPLIT, odds=False):
     """Plot TPR and FPR vs p for all methods."""
     df = pd.read_csv(require_input(
         csv_file,
@@ -46,32 +47,24 @@ def plot_tpr_fpr_results(csv_file, output_file):
         tpr_stds = method_df['tpr_std'].values
         
         display_name = method_label(method)
-        axes[0].errorbar(p_vals, tpr_means, yerr=tpr_stds,
+        axes[0].errorbar(p_axis(p_vals, p_symbol, odds)[0], tpr_means, yerr=tpr_stds,
                         label=display_name,
                         color=method_to_color[method], **plot_style.ERRORBAR)
     
-    axes[0].set_xlabel(r'Split probability $p$')
+    axes[0].set_xlabel(p_axis([], p_symbol, odds)[1])
     axes[0].set_ylabel('TPR')
-    axes[0].set_title('TPR vs Split Probability')
     axes[0].set_ylim([0, 1])
     
-    # Plot FPR
+    # Plot FPR on a log axis, zero on its own row
+    zero = plot_style.zero_row(df['fpr_mean'], df['fpr_std'])
     for method in methods:
-        method_df = df[df['method'] == method]
-        method_df = method_df.sort_values('p')
-        p_vals = method_df['p'].values
-        fpr_means = method_df['fpr_mean'].values
-        fpr_stds = method_df['fpr_std'].values
-        
-        display_name = method_label(method)
-        axes[1].errorbar(p_vals, fpr_means, yerr=fpr_stds,
-                        label=display_name,
-                        color=method_to_color[method], **plot_style.ERRORBAR)
-    
-    axes[1].set_xlabel(r'Split probability $p$')
+        method_df = df[df['method'] == method].sort_values('p')
+        plot_style.errorbar_log(axes[1], p_axis(method_df['p'], p_symbol, odds)[0], method_df['fpr_mean'], method_df['fpr_std'], zero,
+                     label=method_label(method), color=method_to_color[method])
+    plot_style.log_axis_with_zero(axes[1], zero, (df['fpr_mean'] + df['fpr_std']).max())
+
+    axes[1].set_xlabel(p_axis([], p_symbol, odds)[1])
     axes[1].set_ylabel('FPR')
-    axes[1].set_title('FPR vs Split Probability')
-    axes[1].set_ylim([0, 1])
     
     plt.tight_layout()
     plot_style.legend_outside(fig)
@@ -80,7 +73,7 @@ def plot_tpr_fpr_results(csv_file, output_file):
     plt.close()
 
 
-def plot_ap_pr_auc_results(csv_file, output_file):
+def plot_ap_pr_auc_results(csv_file, output_file, p_symbol=SPLIT, odds=False):
     """Plot AP and PR-AUC vs p for all methods."""
     df = pd.read_csv(require_input(
         csv_file,
@@ -105,12 +98,11 @@ def plot_ap_pr_auc_results(csv_file, output_file):
         ap_stds = method_df['ap_std'].values
         
         display_name = method_label(method)
-        axes[0].errorbar(p_vals, ap_means, yerr=ap_stds,
+        axes[0].errorbar(p_axis(p_vals, p_symbol, odds)[0], ap_means, yerr=ap_stds,
                          label=display_name,
                          color=method_to_color[method], **plot_style.ERRORBAR)
-    axes[0].set_xlabel(r'Split probability $p$')
+    axes[0].set_xlabel(p_axis([], p_symbol, odds)[1])
     axes[0].set_ylabel('Average Precision (AP)')
-    axes[0].set_title('AP vs Split Probability')
     axes[0].set_ylim([0, 1])
     
     # Plot PR-AUC
@@ -122,12 +114,11 @@ def plot_ap_pr_auc_results(csv_file, output_file):
         pr_auc_stds = method_df['pr_auc_std'].values
         
         display_name = method_label(method)
-        axes[1].errorbar(p_vals, pr_auc_means, yerr=pr_auc_stds,
+        axes[1].errorbar(p_axis(p_vals, p_symbol, odds)[0], pr_auc_means, yerr=pr_auc_stds,
                          label=display_name,
                          color=method_to_color[method], **plot_style.ERRORBAR)
-    axes[1].set_xlabel(r'Split probability $p$')
+    axes[1].set_xlabel(p_axis([], p_symbol, odds)[1])
     axes[1].set_ylabel('PR-AUC (Trapezoidal)')
-    axes[1].set_title('PR-AUC vs Split Probability')
     axes[1].set_ylim([0, 1])
     
     plt.tight_layout()
@@ -137,7 +128,7 @@ def plot_ap_pr_auc_results(csv_file, output_file):
     plt.close()
 
 
-def plot_pr_curves_all_p(json_file, output_file, q, lfc):
+def plot_pr_curves_all_p(json_file, output_file, q, lfc, p_symbol=SPLIT):
     """Plot Precision vs Recall curves for each p value (original style)."""
     with open(json_file, 'r') as f:
         curve_data = json.load(f)
@@ -195,7 +186,7 @@ def plot_pr_curves_all_p(json_file, output_file, q, lfc):
         
         ax.set_xlabel('Recall')
         ax.set_ylabel('Precision')
-        ax.set_title(f'p = {p:.3f}')
+        ax.set_title(f'{p_symbol} = {p:.3f}')
         ax.set_xlim([0, 1])
         ax.set_ylim([0, 1])
     
@@ -203,7 +194,6 @@ def plot_pr_curves_all_p(json_file, output_file, q, lfc):
     for idx in range(n_p, len(axes)):
         axes[idx].axis('off')
     
-    fig.suptitle(f'Precision vs recall (q={q}, lfc={lfc})')
     plt.tight_layout()
     plot_style.legend_outside(fig)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
@@ -211,7 +201,7 @@ def plot_pr_curves_all_p(json_file, output_file, q, lfc):
     plt.close()
 
 
-def plot_pr_curves_selected_p(json_file, output_file, q, lfc):
+def plot_pr_curves_selected_p(json_file, output_file, q, lfc, p_symbol=SPLIT):
     """Plot Precision vs Recall curves for selected p values (smallest, median, largest) in one plot."""
     with open(json_file, 'r') as f:
         curve_data = json.load(f)
@@ -258,18 +248,78 @@ def plot_pr_curves_selected_p(json_file, output_file, q, lfc):
     
     ax.set_xlabel('Recall')
     ax.set_ylabel('Precision')
-    ax.set_title(f'Precision vs Recall (q={q}, lfc={lfc})')
     ax.set_xlim([0, 1])
     ax.set_ylim([0, 1])
     
     plt.tight_layout()
-    method_and_p_legends(fig, methods, selected_p, linestyle_map)
+    method_and_p_legends(fig, methods, selected_p, linestyle_map, p_symbol)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
 
 
-def plot_summary_figure(csv_file, json_file, output_file, q, lfc):
+def draw_pr_auc(ax, curves, methods, p_values_json, p_symbol=SPLIT, odds=False):
+    """PR-AUC against p: the area under each p's mean PR curve, with bars of one SD of the replicates' areas."""
+    # PR-AUC vs p (recomputed from JSON PR curves)
+    # Use JSON p grid to ensure availability of curves
+    p_values_for_auc = np.sort(p_values_json)
+    for method in methods:
+        pr_auc_list = []
+        pr_auc_err = []
+        p_valid = []
+        for p in p_values_for_auc:
+            p_key = f"p_{p:.6f}"
+            if p_key in curves and method in curves[p_key]:
+                md = curves[p_key][method]
+                recall = np.array(md.get('recall', []))
+                precision_mean = np.array(md.get('precision_mean', []))
+                if recall.size > 1 and precision_mean.size == recall.size:
+                    # Recompute AUC from mean curve
+                    auc_val = np.trapz(precision_mean, recall)
+                    pr_auc_list.append(auc_val)
+                    # If std available, use it as yerr; else no error bar
+                    pr_auc_std = md.get('pr_auc_curve_std', None)
+                    if pr_auc_std is None:
+                        pr_auc_err.append(np.nan)
+                    else:
+                        pr_auc_err.append(pr_auc_std)
+                    p_valid.append(p)
+        if len(p_valid) > 0:
+            p_valid = np.array(p_valid)
+            pr_auc_arr = np.array(pr_auc_list, dtype=float)
+            pr_auc_err_arr = np.array(pr_auc_err, dtype=float)
+            # Plot with error bars where available
+            # If all yerr are NaN, omit yerr to avoid warnings
+            if np.all(np.isnan(pr_auc_err_arr)):
+                ax.errorbar(p_axis(p_valid, p_symbol, odds)[0], pr_auc_arr,
+                                  color=method_color(method), **plot_style.ERRORBAR)
+            else:
+                ax.errorbar(p_axis(p_valid, p_symbol, odds)[0], pr_auc_arr, yerr=pr_auc_err_arr,
+                                  color=method_color(method), **plot_style.ERRORBAR)
+    ax.set_xlabel(p_axis([], p_symbol, odds)[1])
+    ax.set_ylabel('PR-AUC')
+    ax.set_ylim([0, 1])
+    ax.tick_params(axis='both', which='major')
+
+
+def plot_pr_auc(json_file, output_file, p_symbol=SPLIT, odds=False):
+    """The summary figure's PR-AUC panel on its own."""
+    with open(json_file, 'r') as f:
+        curve_data = json.load(f)
+    curves = curve_data['curves']
+    methods = method_draw_order(curves[next(iter(curves))])
+    fig, ax = plt.subplots(1, 1, figsize=plot_style.figsize())
+    draw_pr_auc(ax, curves, methods, np.array(curve_data['p_values']), p_symbol, odds)
+    plt.tight_layout()
+    plot_style.legend_outside(fig, [Line2D([0], [0], color=method_color(m), marker='o', ms=plot_style.ERRORBAR['ms'], lw=plot_style.ERRORBAR['lw'])
+                               for m in methods],
+                              [method_label(m) for m in methods])
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    print(f"Plot saved to {output_file}")
+    plt.close()
+
+
+def plot_summary_figure(csv_file, json_file, output_file, q, lfc, p_symbol=SPLIT, odds=False):
     """
     Create a summary figure with:
       Top row:    [TPR vs p]  [FPR vs p]
@@ -304,62 +354,23 @@ def plot_summary_figure(csv_file, json_file, output_file, q, lfc):
     # TPR vs p
     for method in methods:
         mdf = df[df['method'] == method].sort_values('p')
-        ax_tpr.errorbar(mdf['p'].values, mdf['tpr_mean'].values, yerr=mdf['tpr_std'].values,
+        ax_tpr.errorbar(p_axis(mdf['p'].values, p_symbol, odds)[0], mdf['tpr_mean'].values, yerr=mdf['tpr_std'].values,
                         color=method_to_color[method], **plot_style.ERRORBAR,
                         label=method_label(method))
-    ax_tpr.set_xlabel(r'Split probability $p$')
+    ax_tpr.set_xlabel(p_axis([], p_symbol, odds)[1])
     ax_tpr.set_ylabel('TPR')
     ax_tpr.set_ylim([0, 1])
     ax_tpr.tick_params(axis='both', which='major')
-    # FPR vs p
+    # FPR vs p, on a log axis with zero on its own row
+    zero = plot_style.zero_row(df['fpr_mean'], df['fpr_std'])
     for method in methods:
         mdf = df[df['method'] == method].sort_values('p')
-        ax_fpr.errorbar(mdf['p'].values, mdf['fpr_mean'].values, yerr=mdf['fpr_std'].values,
-                        color=method_to_color[method], **plot_style.ERRORBAR)
-    ax_fpr.set_xlabel(r'Split probability $p$')
+        plot_style.errorbar_log(ax_fpr, p_axis(mdf['p'], p_symbol, odds)[0], mdf['fpr_mean'], mdf['fpr_std'], zero, color=method_to_color[method])
+    plot_style.log_axis_with_zero(ax_fpr, zero, (df['fpr_mean'] + df['fpr_std']).max())
+    ax_fpr.set_xlabel(p_axis([], p_symbol, odds)[1])
     ax_fpr.set_ylabel('FPR')
-    ax_fpr.set_ylim([0, 1])
     ax_fpr.tick_params(axis='both', which='major')
-    # PR-AUC vs p (recomputed from JSON PR curves)
-    # Use JSON p grid to ensure availability of curves
-    p_values_for_auc = np.sort(p_values_json)
-    for method in methods:
-        pr_auc_list = []
-        pr_auc_err = []
-        p_valid = []
-        for p in p_values_for_auc:
-            p_key = f"p_{p:.6f}"
-            if p_key in curves and method in curves[p_key]:
-                md = curves[p_key][method]
-                recall = np.array(md.get('recall', []))
-                precision_mean = np.array(md.get('precision_mean', []))
-                if recall.size > 1 and precision_mean.size == recall.size:
-                    # Recompute AUC from mean curve
-                    auc_val = np.trapz(precision_mean, recall)
-                    pr_auc_list.append(auc_val)
-                    # If std available, use it as yerr; else no error bar
-                    pr_auc_std = md.get('pr_auc_curve_std', None)
-                    if pr_auc_std is None:
-                        pr_auc_err.append(np.nan)
-                    else:
-                        pr_auc_err.append(pr_auc_std)
-                    p_valid.append(p)
-        if len(p_valid) > 0:
-            p_valid = np.array(p_valid)
-            pr_auc_arr = np.array(pr_auc_list, dtype=float)
-            pr_auc_err_arr = np.array(pr_auc_err, dtype=float)
-            # Plot with error bars where available
-            # If all yerr are NaN, omit yerr to avoid warnings
-            if np.all(np.isnan(pr_auc_err_arr)):
-                ax_prauc.errorbar(p_valid, pr_auc_arr,
-                                  color=method_to_color[method], **plot_style.ERRORBAR)
-            else:
-                ax_prauc.errorbar(p_valid, pr_auc_arr, yerr=pr_auc_err_arr,
-                                  color=method_to_color[method], **plot_style.ERRORBAR)
-    ax_prauc.set_xlabel(r'Split probability $p$')
-    ax_prauc.set_ylabel('PR-AUC')
-    ax_prauc.set_ylim([0, 1])
-    ax_prauc.tick_params(axis='both', which='major')
+    draw_pr_auc(ax_prauc, curves, methods, p_values_json, p_symbol, odds)
     # Selected PR curves (min, median, max p); the keys are drawn once, outside
     for method in methods:
         color = method_to_color[method]
@@ -377,7 +388,7 @@ def plot_summary_figure(csv_file, json_file, output_file, q, lfc):
     ax_prcurves.set_ylim([0, 1])
     ax_prcurves.tick_params(axis='both', which='major')
     plt.tight_layout()
-    method_and_p_legends(fig, methods, selected_p, linestyle_map)
+    method_and_p_legends(fig, methods, selected_p, linestyle_map, p_symbol)
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
     print(f"Plot saved to {output_file}")
     plt.close()
@@ -391,11 +402,14 @@ if __name__ == '__main__':
                         help='Input JSON file with PR curve data')
     parser.add_argument('--output_prefix', type=str, default=str(results_dir(__file__) / 'spot_split'),
                         help='Output file prefix for plots (default: kidney/results/spot_split)')
+    parser.add_argument('--downsampling', action='store_true',
+                        help='Results are from umi_de: label the axis with the sampling probability')
     args = parser.parse_args()
     
     csv_file = args.csv_file
     json_file = args.json_file
     output_prefix = args.output_prefix
+    p_symbol = SAMPLING if args.downsampling else SPLIT
     
     # Read q and lfc from CSV (should be same for all rows)
     df = pd.read_csv(require_input(
@@ -408,25 +422,16 @@ if __name__ == '__main__':
     
     print(f"Visualizing results with q={q}, lfc={lfc}")
     
-    # Plot 1: TPR and FPR
-    print("Plotting TPR and FPR...")
-    plot_tpr_fpr_results(csv_file, fig_name(f"{output_prefix}_tpr_fpr"))
-    
-    # Plot 2: AP and PR-AUC
-    print("Plotting AP and PR-AUC...")
-    plot_ap_pr_auc_results(csv_file, fig_name(f"{output_prefix}_ap_pr_auc"))
-    
-    # Plot 3: PR curves for all p values
-    print("Plotting PR curves for all p values...")
-    plot_pr_curves_all_p(json_file, fig_name(f"{output_prefix}_pr_curves_all_p"), q, lfc)
-    
-    # Plot 4: PR curves for selected p values (min, median, max)
-    print("Plotting PR curves for selected p values...")
-    plot_pr_curves_selected_p(json_file, fig_name(f"{output_prefix}_pr_curves_selected_p"), q, lfc)
-    
-    # Plot 5: Summary figure (TPR/FPR/PR-AUC + selected PR curves)
-    print("Plotting summary figure...")
-    plot_summary_figure(csv_file, json_file, fig_name(f"{output_prefix}_summary"), q, lfc)
+    for odds, suffix in ((False, ''), (True, '_odds')):
+        print(f"Plotting TPR and FPR, AP and PR-AUC, PR-AUC, summary{' against (1 - p) / p' if odds else ''}...")
+        plot_tpr_fpr_results(csv_file, fig_name(f"{output_prefix}_tpr_fpr{suffix}"), p_symbol, odds)
+        plot_ap_pr_auc_results(csv_file, fig_name(f"{output_prefix}_ap_pr_auc{suffix}"), p_symbol, odds)
+        plot_pr_auc(json_file, fig_name(f"{output_prefix}_pr_auc{suffix}"), p_symbol, odds)
+        plot_summary_figure(csv_file, json_file, fig_name(f"{output_prefix}_summary{suffix}"), q, lfc, p_symbol, odds)
+
+    print("Plotting PR curves...")
+    plot_pr_curves_all_p(json_file, fig_name(f"{output_prefix}_pr_curves_grid"), q, lfc, p_symbol)
+    plot_pr_curves_selected_p(json_file, fig_name(f"{output_prefix}_pr_curves"), q, lfc, p_symbol)
     
     print("Done!")
 

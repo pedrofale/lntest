@@ -49,19 +49,21 @@ def fpr_test_single(X, Y):
             lfcs, DELN_p_vals = get_DELN_lfcs(Y, X, test='t')
             adj_pvals = smm.multipletests(DELN_p_vals, alpha=0.05, method='fdr_bh')[1]
             if np.sum(adj_pvals >= 0.05) == n_genes:
-                results[method_key] = {"fpr": 0., "fpr_filtered": 0.}
+                results[method_key] = {"fpr": 0., "fpr_filtered": 0., "n_degs": 0, "n_genes": n_genes}
             else:
                 test_results = get_test_results(adj_pvals, np.zeros(n_genes), verbose=False)
                 fpr_filtered = np.sum(np.abs(lfcs[adj_pvals < 0.05]) > 0.25) / adj_pvals.size
-                results[method_key] = {"fpr": test_results['fpr'], "fpr_filtered": fpr_filtered}
+                results[method_key] = {"fpr": test_results['fpr'], "fpr_filtered": fpr_filtered,
+                                       "n_degs": int(np.sum(adj_pvals < 0.05)), "n_genes": n_genes}
         else:
             lfcs, adj_pvals = scanpy_sig_test(X, Y, method=method)
             if np.sum(adj_pvals >= 0.05) == n_genes:
-                results[method_key] = {"fpr": 0., "fpr_filtered": 0.}
+                results[method_key] = {"fpr": 0., "fpr_filtered": 0., "n_degs": 0, "n_genes": n_genes}
             else:
                 test_results = get_test_results(adj_pvals, np.zeros(n_genes), verbose=False)
                 fpr_filtered = np.sum(np.abs(lfcs[adj_pvals < 0.05]) > 0.25) / adj_pvals.size
-                results[method_key] = {"fpr": test_results['fpr'], "fpr_filtered": fpr_filtered}
+                results[method_key] = {"fpr": test_results['fpr'], "fpr_filtered": fpr_filtered,
+                                       "n_degs": int(np.sum(adj_pvals < 0.05)), "n_genes": n_genes}
     
     return results
 
@@ -438,11 +440,11 @@ def run_tests_for_p_fpr(p, umis, shape_id_to_indices, unique_shape_ids, n_reps, 
         results_list = pool.map(run_single_iteration_fpr, args_list)
     
     # Aggregate results
-    aggregated = defaultdict(lambda: {"fpr": [], "fpr_filtered": []})
+    aggregated = defaultdict(lambda: {"fpr": [], "fpr_filtered": [], "n_degs": [], "n_genes": []})
     for result in results_list:
         for method, metrics in result.items():
-            aggregated[method]["fpr"].append(metrics["fpr"])
-            aggregated[method]["fpr_filtered"].append(metrics["fpr_filtered"])
+            for key in aggregated[method]:
+                aggregated[method][key].append(metrics[key])
     
     # Compute means and stds (both raw and log10)
     summary = {}
@@ -478,7 +480,10 @@ def run_tests_for_p_fpr(p, umis, shape_id_to_indices, unique_shape_ids, n_reps, 
             "fpr_filtered_log10_mean": fpr_filtered_log10_mean,
             "fpr_filtered_log10_std": fpr_filtered_log10_std,
             "fpr_values": fpr_values.tolist(),
-            "fpr_filtered_values": fpr_filtered_values.tolist()
+            "fpr_filtered_values": fpr_filtered_values.tolist(),
+            "n_degs_values": metrics["n_degs"],
+            "n_genes_values": metrics["n_genes"],
+            "seeds": seeds.tolist(),
         }
     
     return summary
@@ -494,6 +499,24 @@ def run_tests_for_p_de(p, q, lfc, umis, shape_id_to_indices, unique_shape_ids, n
     with Pool(processes=n_jobs, initializer=_init_worker, initargs=(umis,)) as pool:
         results_list = pool.map(run_single_iteration_de, args_list)
     
+    return summarise_de(results_list)
+
+
+RECALL_GRID = np.linspace(0, 1, 101)  # the common recall values PR curves are averaged on
+
+
+def interpolate_precision(prec_curve, rec_curve, recall_grid=RECALL_GRID):
+    """One replicate's precision at the common recall values, held constant beyond its ends."""
+    sort_idx = np.argsort(rec_curve)
+    rec_sorted = rec_curve[sort_idx]
+    prec_sorted = prec_curve[sort_idx]
+    return np.interp(recall_grid, rec_sorted, prec_sorted,
+                     left=prec_sorted[0] if len(prec_sorted) > 0 else 1.0,
+                     right=prec_sorted[-1] if len(prec_sorted) > 0 else 0.0)
+
+
+def summarise_de(results_list):
+    """Means and SDs over replicates of de_test_single's metrics, and the mean PR curve."""
     # Aggregate results
     aggregated = defaultdict(lambda: {"tpr": [], "fpr": [], "fnr": [], "tnr": [], "accuracy": [], "precision": [], 
                                       "precision_curve": [], "recall_curve": [], "pr_auc_curve": [], "ap": [], "pr_auc": []})
@@ -527,21 +550,11 @@ def run_tests_for_p_de(p, q, lfc, umis, shape_id_to_indices, unique_shape_ids, n
         
         # Aggregate precision-recall curves by interpolating to common recall values
         # Use a common set of recall values from 0 to 1
-        recall_grid = np.linspace(0, 1, 101)  # 101 points from 0 to 1
+        recall_grid = RECALL_GRID
         precision_interpolated = []
         
         for prec_curve, rec_curve in zip(metrics["precision_curve"], metrics["recall_curve"]):
-            # Sort by recall for interpolation
-            sort_idx = np.argsort(rec_curve)
-            rec_sorted = rec_curve[sort_idx]
-            prec_sorted = prec_curve[sort_idx]
-            
-            # Interpolate precision at common recall values
-            # Use forward fill for values outside the range
-            prec_interp = np.interp(recall_grid, rec_sorted, prec_sorted, 
-                                  left=prec_sorted[0] if len(prec_sorted) > 0 else 1.0,
-                                  right=prec_sorted[-1] if len(prec_sorted) > 0 else 0.0)
-            precision_interpolated.append(prec_interp)
+            precision_interpolated.append(interpolate_precision(prec_curve, rec_curve, recall_grid))
         
         precision_interpolated = np.array(precision_interpolated)
         precision_curve_mean = np.mean(precision_interpolated, axis=0)
@@ -595,6 +608,19 @@ def save_results_fpr(p_values, results_by_p, output_file):
     df = pd.DataFrame(rows)
     df.to_csv(output_file, index=False)
     print(f"Results saved to {output_file}")
+
+
+def save_per_split_fpr(p_values, results_by_p, output_file):
+    """Save every split's result, one row per split and method, beside the summary CSV."""
+    rows = []
+    for p in p_values:
+        for method, metrics in results_by_p[p].items():
+            for split, values in enumerate(zip(metrics['seeds'], metrics['n_genes_values'], metrics['n_degs_values'],
+                                               metrics['fpr_values'], metrics['fpr_filtered_values'])):
+                rows.append(dict(zip(['p', 'method', 'split', 'seed', 'n_genes', 'n_degs', 'fpr', 'fpr_filtered'],
+                                     (p, method, split) + values)))
+    pd.DataFrame(rows).to_csv(output_file, index=False)
+    print(f"Per-split results saved to {output_file}")
 
 
 def save_results_de(p_values, results_by_p, output_file, q, lfc):
@@ -682,9 +708,8 @@ def plot_fpr_results(p_values, results_by_p, output_file):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0].set_xlabel('Split probability (p)')
+    axes[0].set_xlabel(r'$p_\mathrm{split}$')
     axes[0].set_ylabel('log10(FPR)')
-    axes[0].set_title('FPR vs Split Probability')
     
     # Plot FPR Filtered
     for idx, method in enumerate(methods):
@@ -695,9 +720,8 @@ def plot_fpr_results(p_values, results_by_p, output_file):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1].set_xlabel('Split probability (p)')
+    axes[1].set_xlabel(r'$p_\mathrm{split}$')
     axes[1].set_ylabel('log10(FPR Filtered)')
-    axes[1].set_title('FPR Filtered (|lfc| > 0.25) vs Split Probability')
     
     plt.tight_layout()
     plot_style.legend_outside(fig)
@@ -722,9 +746,8 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0, 0].set_xlabel(r'Split probability $p$')
+    axes[0, 0].set_xlabel(r'$p_\mathrm{split}$')
     axes[0, 0].set_ylabel('TPR')
-    axes[0, 0].set_title('TPR vs Split Probability')
     axes[0, 0].set_ylim([0, 1])
     
     # Plot FPR
@@ -736,9 +759,8 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0, 1].set_xlabel(r'Split probability $p$')
+    axes[0, 1].set_xlabel(r'$p_\mathrm{split}$')
     axes[0, 1].set_ylabel('FPR')
-    axes[0, 1].set_title('FPR vs Split Probability')
     axes[0, 1].set_ylim([0, 1])
     
     # Plot FNR
@@ -750,9 +772,8 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1, 0].set_xlabel(r'Split probability $p$')
+    axes[1, 0].set_xlabel(r'$p_\mathrm{split}$')
     axes[1, 0].set_ylabel('False Negative Rate (FNR)')
-    axes[1, 0].set_title('FNR vs Split Probability')
     axes[1, 0].set_ylim([0, 1])
     
     # Plot TNR
@@ -764,9 +785,8 @@ def plot_de_results(p_values, results_by_p, output_file, q, lfc):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1, 1].set_xlabel(r'Split probability $p$')
+    axes[1, 1].set_xlabel(r'$p_\mathrm{split}$')
     axes[1, 1].set_ylabel('True Negative Rate (TNR)')
-    axes[1, 1].set_title(f'TNR vs Split Probability (q={q}, lfc={lfc})')
     axes[1, 1].set_ylim([0, 1])
     
     plt.tight_layout()
@@ -790,9 +810,8 @@ def plot_pr_results(p_values, results_by_p, output_file):
         axes[0].errorbar(p_values, ap_means, yerr=ap_stds,
                          label=method_label(method),
                          color=colors[idx], **plot_style.ERRORBAR)
-    axes[0].set_xlabel(r'Split probability $p$')
+    axes[0].set_xlabel(r'$p_\mathrm{split}$')
     axes[0].set_ylabel('Average Precision (AP)')
-    axes[0].set_title('AP vs Split Probability')
     axes[0].set_ylim([0, 1])
     
     # Plot PR-AUC (trapezoidal)
@@ -802,9 +821,8 @@ def plot_pr_results(p_values, results_by_p, output_file):
         axes[1].errorbar(p_values, pr_auc_means, yerr=pr_auc_stds,
                          label=method_label(method),
                          color=colors[idx], **plot_style.ERRORBAR)
-    axes[1].set_xlabel(r'Split probability $p$')
+    axes[1].set_xlabel(r'$p_\mathrm{split}$')
     axes[1].set_ylabel('PR-AUC (Trapezoidal)')
-    axes[1].set_title('PR-AUC vs Split Probability')
     axes[1].set_ylim([0, 1])
     
     plt.tight_layout()
@@ -855,7 +873,7 @@ def plot_precision_recall_results(p_values, results_by_p, output_file, q, lfc):
         
         ax.set_xlabel('Recall')
         ax.set_ylabel('Precision')
-        ax.set_title(f'p = {p:.3f}')
+        ax.set_title(rf'$p_\mathrm{{split}}$ = {p:.3f}')
         ax.set_xlim([0, 1])
         ax.set_ylim([0, 1])
     
@@ -1032,6 +1050,7 @@ if __name__ == '__main__':
     print(f"\nSaving results...")
     if q == 0:
         save_results_fpr(p_values, results_by_p, results_file)
+        save_per_split_fpr(p_values, results_by_p, f"{os.path.splitext(output_file)[0]}_per_split.csv")
         # plot_fpr_results(p_values, results_by_p, output_file)
     else:
         save_results_de(p_values, results_by_p, results_file, q, lfc)

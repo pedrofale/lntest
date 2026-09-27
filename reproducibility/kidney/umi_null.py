@@ -188,9 +188,8 @@ def plot_fdr_results(p_values, results_by_p, output_file):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[0].set_xlabel('Downsample ratio (p)')
+    axes[0].set_xlabel(r'$p_\mathrm{sample}$')
     axes[0].set_ylabel('log10(FPR)')
-    axes[0].set_title('FPR vs Downsample Ratio')
     
     # Plot FPR Filtered
     for idx, method in enumerate(methods):
@@ -201,9 +200,8 @@ def plot_fdr_results(p_values, results_by_p, output_file):
                         label=method_label(method), 
                         color=colors[idx], **plot_style.ERRORBAR)
     
-    axes[1].set_xlabel('Downsample ratio (p)')
+    axes[1].set_xlabel(r'$p_\mathrm{sample}$')
     axes[1].set_ylabel('log10(FPR Filtered)')
-    axes[1].set_title('FPR Filtered (|lfc| > 0.25) vs Downsample Ratio')
     
     plt.tight_layout()
     plot_style.legend_outside(fig)

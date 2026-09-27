@@ -1,8 +1,9 @@
 """The glomerular capsules on the kidney H&E, and one capsule's 2 um spots split into two groups.
 
 Rebuilds RECOMB Fig 2b, which was a hand composite of a matplotlib overlay and three QuPath renders
-of unseeded splits. The split is spot_split's: per capsule, n_A ~ Binomial(n_spots, p) spots chosen
-at random go to group A, drawn in yellow; the rest are group B.
+of unseeded splits, as two figures: capsule_overview.pdf and capsule_split_illustration.pdf. The split
+is spot_split's: per capsule, n_A ~ Binomial(n_spots, p) spots chosen at random go to group A, drawn
+in blue; the rest are group B, in orange -- the two groups' colours in theory/log1p_toy.py.
 
     python -m kidney.capsule_figure      # from reproducibility/
 
@@ -21,6 +22,8 @@ import shapely.affinity
 import tifffile
 import zarr
 from matplotlib.collections import PolyCollection
+from matplotlib.colors import to_rgba
+from matplotlib.patches import Patch, Rectangle
 from matplotlib.image import imread
 
 import plot_style
@@ -30,7 +33,8 @@ DATA = data_dir(__file__)
 SPLIT_P = (0.5, 0.3, 0.1)
 OUTLINE = '#ffd400'   # capsule outlines on the overview
 BOUNDS = '#f2f2f2'    # a capsule's outer bounds in the close-ups
-GROUP_A = '#ffd400'   # its group-A spots
+GROUPS = {'A': '#1f77b4', 'B': '#ff7f0e'}  # tab10 blue and orange, as X and Y in theory/log1p_toy.py
+FILL = 0.45           # the groups' opacity over the H&E
 BAND = 2.9            # overview width / height, as in the published strip
 
 
@@ -68,13 +72,13 @@ def draw_outline(ax, geom, scale, **kw):
 
 
 def scale_bar(ax, microns, px_per_micron, label):
-    """A white bar in the lower left, in place of pixel-coordinate ticks."""
+    """A black bar in the lower left, in place of pixel-coordinate ticks."""
     x0, x1 = ax.get_xlim()
     y0, y1 = ax.get_ylim()  # images run top to bottom, so y0 is the bottom
     w, h = x1 - x0, y0 - y1
     left, bottom = x0 + 0.04 * w, y0 - 0.05 * h
-    ax.plot([left, left + microns * px_per_micron], [bottom, bottom], color='white', lw=2, solid_capstyle='butt')
-    ax.text(left, bottom - 0.025 * h, label, color='white', fontsize=plot_style.SMALL, va='bottom')
+    ax.plot([left, left + microns * px_per_micron], [bottom, bottom], color='black', lw=2, solid_capstyle='butt')
+    ax.text(left, bottom - 0.025 * h, label, color='black', fontsize=plot_style.SMALL, va='bottom')
 
 
 def read_crop(tif, x0, y0, x1, y1):
@@ -106,10 +110,7 @@ def main(capsule, seed):
         capsule = min(sizes, key=lambda s: abs(sizes[s] - np.median(list(sizes.values()))))
     mine = spots[spots[:, 0] == capsule, 1:3]
 
-    fig = plt.figure(figsize=(7.2, 7.2 / BAND + 2.6), layout='constrained')
-    top, bottom = fig.subfigures(2, 1, height_ratios=[7.2 / BAND, 2.6])
-    ax = top.subplots()
-    axes = bottom.subplots(1, len(SPLIT_P))
+    fig, ax = plt.subplots(figsize=(7.2, 7.2 / BAND), layout='constrained')
 
     # Overview: the hires image, cropped to the band of the section with the most capsules
     hires = imread(require_input(DATA / 'spatial/tissue_hires_image.png', what='the hires H&E',
@@ -124,10 +125,16 @@ def main(capsule, seed):
               interpolation='antialiased')
     for geom in outlines.values():
         draw_outline(ax, geom, s, color=OUTLINE, lw=0.6)
+    # the capsule of the close-ups, framed so it can be found at print size
+    bx0, by0, bx1, by1 = (v * s for v in outlines[capsule].bounds)
+    frame = 0.6 * max(bx1 - bx0, by1 - by0)
+    ax.add_patch(Rectangle((bx0 - frame, by0 - frame), bx1 - bx0 + 2 * frame, by1 - by0 + 2 * frame,
+                           fill=False, edgecolor='black', lw=0.8))
     ax.set_xlim(c0, c1)
     ax.set_ylim(r1, r0)
     ax.set_axis_off()
     scale_bar(ax, 500, s / mpp, '500 µm')
+    save(fig, 'capsule_overview')
 
     # Close-ups: one capsule on the full-resolution H&E, group A in yellow
     g = outlines[capsule]
@@ -137,23 +144,32 @@ def main(capsule, seed):
     tif = require_input(DATA / 'Visium_HD_Human_Kidney_FFPE_tissue_image.tif', what='the full-resolution H&E',
                         source='python -m fetch_data --arm kidney')
     crop = read_crop(tif, cx0, cy0, cx1, cy1)
+    fig, axes = plt.subplots(1, len(SPLIT_P), figsize=(7.2, 2.6), layout='constrained')
     rng = np.random.default_rng(seed)
     for ax, p in zip(axes, SPLIT_P):
-        n_a = rng.binomial(len(mine), p)
-        a = mine[rng.choice(len(mine), n_a, replace=False)] - [cx0, cy0]
+        in_a = np.zeros(len(mine), dtype=bool)
+        in_a[rng.choice(len(mine), rng.binomial(len(mine), p), replace=False)] = True
         ax.imshow(crop, extent=(0, cx1 - cx0, cy1 - cy0, 0), interpolation='antialiased')
-        squares = [np.array([[x - half, y - half], [x + half, y - half], [x + half, y + half], [x - half, y + half]])
-                   for x, y in a]
-        ax.add_collection(PolyCollection(squares, facecolors=(1, 0.83, 0, 0.25), edgecolors=GROUP_A, linewidths=0.4))
+        for group, members in (('A', in_a), ('B', ~in_a)):
+            squares = [np.array([[x - half, y - half], [x + half, y - half], [x + half, y + half], [x - half, y + half]])
+                       for x, y in mine[members] - [cx0, cy0]]
+            # filled, no edges: neighbouring squares share borders, so the group drawn last would own them all
+            ax.add_collection(PolyCollection(squares, facecolors=to_rgba(GROUPS[group], FILL), edgecolors='none',
+                                             rasterized=True))  # vector squares leave seams in PDF viewers
         draw_outline(ax, shapely.affinity.translate(g, -cx0, -cy0), 1, color=BOUNDS, lw=0.8)
-        ax.set_title(f'$p$ = {p:g}')
+        ax.set_title(rf'$p_\mathrm{{split}}$ = {p:g}')
         ax.set_axis_off()
     scale_bar(axes[0], 50, 1 / mpp, '50 µm')
+    fig.legend([Patch(facecolor=to_rgba(c, FILL), edgecolor='none') for c in GROUPS.values()],
+               [f'Group {k}' for k in GROUPS], loc='outside right upper')
+    save(fig, 'capsule_split_illustration', f' (capsule {capsule:g}, {len(mine)} spots)')
 
-    out = results_dir(__file__) / fig_name('capsule_split_illustration')
+
+def save(fig, stem, note=''):
+    out = results_dir(__file__) / fig_name(stem)
     fig.savefig(out, dpi=plot_style.RASTER_DPI, bbox_inches='tight')
     plt.close(fig)
-    print(f'wrote {out} (capsule {capsule:g}, {len(mine)} spots)')
+    print(f'wrote {out}{note}')
 
 
 if __name__ == '__main__':

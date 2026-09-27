@@ -6,6 +6,8 @@ then the text is the same size in every figure of the paper.
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import FixedLocator, FuncFormatter
 
 from method_colors import legend_sorted
 
@@ -100,3 +102,35 @@ def rasterize_dense(fig):
 def boxplot_grid(ax):
     """Box plots keep only the horizontal grid lines: their x-axis is categorical."""
     ax.grid(False, axis='x')
+
+
+def zero_row(mean, sd):
+    """Where zero goes on a log axis: one decade below the smallest positive mean or lower bar."""
+    mean, sd = np.asarray(mean, dtype=float), np.asarray(sd, dtype=float)
+    positive = np.concatenate([mean[mean > 0], (mean - sd)[mean - sd > 0]])
+    return 10.0 ** (np.floor(np.log10(positive.min())) - 1)
+
+
+def errorbar_log(ax, x, mean, sd, zero, **kwargs):
+    """Mean with one-SD bars on a log axis; a zero mean, or a bar reaching zero, ends on the zero row."""
+    m, s = np.asarray(mean, dtype=float), np.asarray(sd, dtype=float)
+    y = np.where(m > 0, m, zero)
+    lo = np.where(m - s > 0, m - s, zero)
+    hi = np.where(m + s > 0, m + s, zero)
+    ax.errorbar(x, y, yerr=[y - lo, hi - y], **ERRORBAR, **kwargs)
+
+
+def log_axis_with_zero(ax, zero, largest):
+    """A log y-axis whose bottom tick, labelled 0, is the zero row, set off by a break mark on the spine."""
+    ax.set_yscale('log')
+    top = 10.0 ** np.ceil(np.log10(largest))
+    ax.set_ylim(zero / 3, top)
+    decades = 10.0 ** np.arange(np.log10(zero) + 1, np.log10(top) + 1)
+    ax.yaxis.set_major_locator(FixedLocator(np.concatenate([[zero], decades])))
+    ax.yaxis.set_minor_locator(FixedLocator([]))
+    ax.yaxis.set_major_formatter(FuncFormatter(
+        lambda v, _: '0' if np.isclose(v, zero) else f'$10^{{{int(round(np.log10(v)))}}}$'))
+    gap = zero * np.sqrt(10)
+    for f in (0.8, 1.25):
+        ax.plot([-0.025, 0.025], [gap * f / 1.25, gap * f * 1.25], transform=ax.get_yaxis_transform(),
+                color='black', lw=0.8, clip_on=False)
