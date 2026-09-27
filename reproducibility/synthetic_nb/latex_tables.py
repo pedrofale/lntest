@@ -45,7 +45,7 @@ for dispersion in sorted(set(df.dispersion)):
         ax.set_title(name)
     fig.suptitle(r'$(\phi_{Y_j}, \phi_{X_j}) =$' + f' (1.0, {dispersion})')
     fig.tight_layout()
-    out = results_dir(__file__) / fig_name(f'boxplots_dispersion_{dispersion}')
+    out = results_dir(__file__) / fig_name(f'degs_boxplots_dispersion_{dispersion}')
     plt.savefig(out, dpi=200, bbox_inches='tight')
     plt.close('all')
     print(f'wrote {out}')

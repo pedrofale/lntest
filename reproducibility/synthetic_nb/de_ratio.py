@@ -56,7 +56,7 @@ def plot(setting):
         frameon=False, loc='outside right center',
         alignment='left')
 
-    out = out_dir(setting).parent / fig_name(f'de_metrics_vs_ratio_{setting}')
+    out = out_dir(setting).parent / fig_name(f'degs_metrics_{setting}')
     plot_style.rasterize_dense(fig)
     fig.savefig(out, dpi=plot_style.RASTER_DPI, bbox_inches='tight')
     plt.close(fig)

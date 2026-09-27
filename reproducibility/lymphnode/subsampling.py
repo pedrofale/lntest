@@ -779,19 +779,19 @@ def plot_results(df_results, top_genes, output_dir):
     plot_style.use()
     # Metrics to plot; each gets a combined plot and a per-cluster faceted plot
     plot_metrics = [
-        ("jaccard_top", "jaccard_top_vs_subsampling.png"),
-        ("jaccard_all", "jaccard_all_vs_subsampling.png"),
-        ("auprc", "auprc_vs_subsampling.png"),
+        ("jaccard_top", "jaccard_top.png"),
+        ("jaccard_all", "jaccard_all.png"),
+        ("auprc", "auprc.png"),
     ]
     if "gsea_nes" in df_results.columns:
-        plot_metrics.append(("gsea_nes", "gsea_nes_vs_subsampling.png"))
+        plot_metrics.append(("gsea_nes", "gsea_nes.png"))
     for y_col, fname in plot_metrics:
         if y_col not in df_results.columns:
             continue
         # Combined (all clusters) - use pandas/matplotlib to avoid seaborn boxplot bugs
         fig, ax = plt.subplots(figsize=(7.2, 2.6))
         _plot_box_pandas(df_results, "fraction", y_col, "method", ax=ax)
-        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_xlabel(r"$p_\mathrm{sub}$")
         ax.set_ylabel(y_col)
         plot_style.boxplot_grid(ax)
         plt.tight_layout()
@@ -808,7 +808,7 @@ def plot_results(df_results, top_genes, output_dir):
             sub = df_results[df_results["cluster"] == cl]
             _plot_box_pandas(sub, "fraction", y_col, "method", ax=ax)
             ax.set_title(str(cl))
-            ax.set_xlabel("Sub-sampling fraction (p)")
+            ax.set_xlabel(r"$p_\mathrm{sub}$")
             plot_style.boxplot_grid(ax)
         axes[0].set_ylabel(y_col)
         plt.tight_layout()
@@ -823,12 +823,12 @@ def plot_results(df_results, top_genes, output_dir):
         if col in df_results.columns:
             _plot_box_pandas(df_results, "fraction", col, "method", ax=ax)
             ax.set_ylabel(f"Precision@{k}")
-        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_xlabel(r"$p_\mathrm{sub}$")
         plot_style.boxplot_grid(ax)
     plt.tight_layout()
     _method_legend(plt.gcf(), df_results)
     plot_style.rasterize_dense(plt.gcf())
-    plt.savefig(fig_name(os.path.join(output_dir, "precision_at_k_vs_subsampling.png")), dpi=300, bbox_inches="tight")
+    plt.savefig(fig_name(os.path.join(output_dir, "precision_at_k.png")), dpi=300, bbox_inches="tight")
     plt.close()
     # Precision@k by cluster
     for k in [10, 20, 50, 100]:
@@ -843,13 +843,13 @@ def plot_results(df_results, top_genes, output_dir):
             sub = df_results[df_results["cluster"] == cl]
             _plot_box_pandas(sub, "fraction", col, "method", ax=ax)
             ax.set_title(str(cl))
-            ax.set_xlabel("Sub-sampling fraction (p)")
+            ax.set_xlabel(r"$p_\mathrm{sub}$")
             ax.set_ylabel(f"Precision@{k}")
             plot_style.boxplot_grid(ax)
         plt.tight_layout()
         _method_legend(plt.gcf(), df_results)
         plot_style.rasterize_dense(plt.gcf())
-        plt.savefig(fig_name(os.path.join(output_dir, f"precision_at_{k}_vs_subsampling_by_cluster.png")), dpi=300, bbox_inches="tight")
+        plt.savefig(fig_name(os.path.join(output_dir, f"precision_at_{k}_by_cluster.png")), dpi=300, bbox_inches="tight")
         plt.close()
     # AUPRC vs Jaccard scatter
     plt.figure(figsize=(3.2, 2.8))
@@ -862,23 +862,23 @@ def plot_results(df_results, top_genes, output_dir):
     plt.tight_layout()
     plot_style.legend_outside(plt.gcf())
     plot_style.rasterize_dense(plt.gcf())
-    plt.savefig(fig_name(os.path.join(output_dir, "auprc_vs_jaccard_scatter.png")), dpi=300, bbox_inches="tight")
+    plt.savefig(fig_name(os.path.join(output_dir, "auprc_vs_jaccard.png")), dpi=300, bbox_inches="tight")
     plt.close()
     df_lfc = df_results.drop_duplicates(subset=["fraction", "replicate", "method", "cluster"])
     for y_col, fname in [
-        ("avg_abs_lfc", "avg_lfc_vs_subsampling.png"),
-        ("n_sig_genes", "n_sig_genes_vs_subsampling.png"),
-        ("n_genes_de_table", "n_genes_de_table_vs_subsampling.png"),
-        ("n_genes_used", "n_genes_used_vs_subsampling.png"),
-        ("frac_de_genes_valid_score", "frac_de_genes_valid_score_vs_subsampling.png"),
-        ("n_cells_cluster", "n_cells_cluster_vs_subsampling.png"),
-        ("n_cells_other", "n_cells_other_vs_subsampling.png"),
+        ("avg_abs_lfc", "avg_abs_lfc.png"),
+        ("n_sig_genes", "n_sig_genes.png"),
+        ("n_genes_de_table", "n_genes_de_table.png"),
+        ("n_genes_used", "n_genes_used.png"),
+        ("frac_de_genes_valid_score", "frac_de_genes_valid_score.png"),
+        ("n_cells_cluster", "n_cells_cluster.png"),
+        ("n_cells_other", "n_cells_other.png"),
     ]:
         if y_col not in df_lfc.columns:
             continue
         fig, ax = plt.subplots(figsize=(7.2, 2.6))
         _plot_box_pandas(df_lfc, "fraction", y_col, "method", ax=ax)
-        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_xlabel(r"$p_\mathrm{sub}$")
         ax.set_ylabel(y_col)
         plot_style.boxplot_grid(ax)
         plt.tight_layout()
@@ -895,7 +895,7 @@ def plot_results(df_results, top_genes, output_dir):
             sub = df_lfc[df_lfc["cluster"] == cl]
             _plot_box_pandas(sub, "fraction", y_col, "method", ax=ax)
             ax.set_title(str(cl))
-            ax.set_xlabel("Sub-sampling fraction (p)")
+            ax.set_xlabel(r"$p_\mathrm{sub}$")
             plot_style.boxplot_grid(ax)
         axes[0].set_ylabel(y_col)
         plt.tight_layout()
@@ -908,13 +908,13 @@ def plot_results(df_results, top_genes, output_dir):
         df_time = df_results.drop_duplicates(subset=["fraction", "replicate", "method"])
         fig, ax = plt.subplots(figsize=(7.2, 2.6))
         _plot_box_pandas(df_time, "fraction", "de_time_s", "method", ax=ax)
-        ax.set_xlabel("Sub-sampling fraction (p)")
+        ax.set_xlabel(r"$p_\mathrm{sub}$")
         ax.set_ylabel("DE time (s)")
         plot_style.boxplot_grid(ax)
         plt.tight_layout()
         _method_legend(plt.gcf(), df_results)
         plot_style.rasterize_dense(plt.gcf())
-        plt.savefig(fig_name(os.path.join(output_dir, "de_time_s_vs_subsampling.png")), dpi=300, bbox_inches="tight")
+        plt.savefig(fig_name(os.path.join(output_dir, "runtime.png")), dpi=300, bbox_inches="tight")
         plt.close()
 
 

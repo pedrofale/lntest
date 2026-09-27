@@ -18,7 +18,7 @@ def load(base_mus):
     out = results_dir(__file__)
     frames = []
     for mu in base_mus:
-        stem = f'variance_vs_fpr_mu{int(mu)}_ratio_grid'
+        stem = f'null_fpr_by_ratio_mu{int(mu)}'
         path = require_input(out / f'{stem}.csv', what=f"ratio-grid null sweep at base_mu={mu:g}",
                              source=f'python -m synthetic_nb.null --base-mu {mu:g}')
         frames.append(pd.read_csv(path))
@@ -80,7 +80,7 @@ def plot(df, base_mus):
                                  for k, ls in zip(multiples[base_mus[0]], VAR_STYLES)],
                         title=r'Var$(X)$', bbox_to_anchor=(1.01, 0.62), handlelength=3, **style)
 
-    out = results_dir(__file__) / fig_name('variance_ratio_vs_fpr')
+    out = results_dir(__file__) / fig_name('null_fpr')
     fig.savefig(out, dpi=200, bbox_inches='tight', bbox_extra_artists=[methods, var_key])
     plt.close(fig)
     print(f'wrote {out}')

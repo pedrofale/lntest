@@ -112,9 +112,7 @@ def plot(df, metric, out):
 
 def run(base_mu, metric, seed=0, grid='ratio', plot_only=False):
     out = results_dir(__file__)
-    stem = f'variance_vs_{metric}_mu{int(base_mu)}'
-    if grid == 'ratio':
-        stem += '_ratio_grid'
+    stem = f"null_{metric}_by_{'ratio' if grid == 'ratio' else 'var'}_mu{int(base_mu)}"
     csv = out / f'{stem}.csv'
     if plot_only:
         df = pd.read_csv(require_input(csv, what=f"the null sweep at base_mu={base_mu:g}",
