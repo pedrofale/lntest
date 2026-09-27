@@ -62,7 +62,7 @@ Box plots use the method colours with plain black medians, show every observatio
 
 The tree used to emit a mix of `.eps` and `.png`, and four scripts hardcoded `format='eps'` in the
 `savefig` call, so `--output x.png` produced PostScript named `.png`. Those are gone; the filename
-now decides. PDF is also markedly smaller for these plots — `variance_vs_fpr_mu5` went from 460 KB
+now decides. PDF is also markedly smaller for these plots — `null_fpr_by_var_mu5` (then `variance_vs_fpr_mu5`) went from 460 KB
 raster to 17 KB vector.
 
 **Two consequences worth knowing before regenerating anything.** The 22 figure entries in
@@ -177,7 +177,8 @@ python -m synthetic_nb.lfc_confidence_intervals
 `null.py` samples a grid of variance ratios by default: Var(X) is 1, 2, 4 and 8 times the mean (1 is Poisson), and Var(Y)/Var(X) runs from 1 to 16 in quarter-octave steps.
 Ratios below 1 would repeat the same settings with the groups swapped: both tests are two-sided and the groups are the same size.
 Its outputs carry a `_ratio_grid` suffix.
-`--grid dispersion` is the grid behind RECOMB Fig 1 — the same 20 values of Var(Y) for every Var(X) — and writes the unsuffixed `variance_vs_fpr_mu{5,50}.*` that `synthetic_nb/results/checksums.sha256` checksums.
+`--grid dispersion` is the grid behind RECOMB Fig 1 — the same 20 values of Var(Y) for every Var(X) — and writes the `null_fpr_by_var_mu{5,50}.*` that `synthetic_nb/results/checksums.sha256` checksums; the default ratio grid
+writes `null_fpr_by_ratio_mu{5,50}.*`, which `null_ratio` combines into `null_fpr.pdf`.
 
 `small_test.py` reproduces **one** run of a table averaged over 20; its numbers are not expected to match the paper exactly.
 `de_test.py`'s `sparse` setting has RECOMB Table 2's design and its `dense` setting Table 1's, without the batch effect both tables were run with and the paper does not describe: the first half of each group's cells had every mean multiplied by e.
@@ -191,6 +192,11 @@ python -m citeseq.exp                  # writes to citeseq/results/
 cd citeseq/R && Rscript pbmc10k_metrics.R && cd ../..   # the metrics table, CITE_seq_metrics.tex
 python -m citeseq.plots                # every CITE-seq figure, from the CSVs above and the R chain's
 ```
+
+`degs_metrics.pdf` shows the metrics of the table (RECOMB Table 3: accuracy, precision, TPR, TNR, F1),
+and FPR, as box plots, one point per replicate. `degs_summary.pdf` has the kidney with-DEG summary's panels for
+this experiment's one balanced condition: TPR and FPR at BH 0.05, PR-AUC from the ranking by adjusted
+p-value, and the mean precision-recall curves, computed as `kidney/spot_split.py` computes them.
 
 The R stages that build `memory_CD4.h5ad` from the raw 10x download are in `citeseq/R/`, run with `Rscript`.
 The committed `memory_CD4.h5ad` means you do not need them unless you are rebuilding from raw.
@@ -276,40 +282,68 @@ Took ~9 min on an M-series laptop; produces 161 capsules over 18,085 genes, whic
 `main_recomb25.tex` reports for this dataset.
 
 ```bash
-python -m kidney.umi_null --n_cells_remove 35 --n_reps 10000 --output kidney/results/fdr_results_35.pdf
+python -m kidney.umi_null --n_cells_remove 35 --n_reps 10000 --output kidney/results/downsample_null.pdf
 python -m kidney.umi_de   --n_cells_remove 35 --q 0.005 --lfc 3 --p_min 0.125 --n_reps 10000 \
-    --output kidney/results/DE_plot_lfc3.pdf
-python -m kidney.fpr_plots --csv_file kidney/results/fdr_results_35_results.csv \
-    --output kidney/results/fdr_results_35.pdf --aspect_ratio 0.1 --title_suffix '-no DEGs'
-python -m kidney.umi_de_plots --input kidney/results/DE_plot_lfc3_results.csv \
-    --output kidney/results/DE_plot_lfc3.pdf --title_suffix '-with DEGs'
+    --output kidney/results/downsample_degs_10000rep.pdf
+python -m kidney.fpr_plots --csv_file kidney/results/downsample_null_results.csv \
+    --output kidney/results/downsample_null_fpr.pdf
+python -m kidney.umi_de_plots --input kidney/results/downsample_degs_10000rep_results.csv \
+    --output kidney/results/downsample_degs_10000rep_tpr_fpr.pdf
 ```
 
-Spot splitting, behind the two kidney panels both manuscripts show (`2um_nodeg_fpr`,
-`withdeg_2um_100rep_with_auc_lfc3_pretty_plot_summary`). About 4 minutes per run on a 16 GB laptop, 8 workers:
+`umi_de` computes the same DE metrics as `spot_split` (it calls its `de_test_single`), PR-AUC and precision-recall
+curves included, so `spot_split_plots --downsampling` draws the same with-DEG figures for it. A 100-replicate run,
+beside the published 10,000-replicate one:
 
 ```bash
-python -m kidney.spot_split --n_shape_ids_remove 0 --n_reps 100 --output kidney/results/2um_nodeg.pdf
-python -m kidney.spot_split --n_shape_ids_remove 0 --q 0.005 --lfc 3 --n_reps 100 \
-    --output kidney/results/withdeg_2um_100rep_with_auc_lfc3.pdf
-python -m kidney.fpr_plots --csv_file kidney/results/2um_nodeg_results.csv \
-    --output kidney/results/2um_nodeg_fpr.pdf --aspect_ratio 0.045 \
-    --title_suffix '-no DEGs' --p_label 'Split probability'
-python -m kidney.spot_split_plots \
-    --csv_file kidney/results/withdeg_2um_100rep_with_auc_lfc3_results.csv \
-    --json_file kidney/results/withdeg_2um_100rep_with_auc_lfc3_pr_curve_data.json \
-    --output_prefix kidney/results/withdeg_2um_100rep_with_auc_lfc3_pretty_plot
+python -m kidney.umi_de --n_cells_remove 35 --q 0.005 --lfc 3 --p_min 0.125 --n_reps 100 \
+    --output kidney/results/downsample_degs_100rep.pdf
+python -m kidney.spot_split_plots --downsampling \
+    --csv_file kidney/results/downsample_degs_100rep_results.csv \
+    --json_file kidney/results/downsample_degs_100rep_pr_curve_data.json \
+    --output_prefix kidney/results/downsample_degs_100rep
 ```
 
-`spot_split` draws no figure; its `--output` only names the results files.
+`umi_de` splits the capsules at the median depth twice, before planting the DEGs and again after downsampling,
+so a capsule near the median can change group between the two (up to 6 of 126, in 38-70% of replicates) and
+take its planted fold changes with it. Known, not fixed.
 
-The capsule figure — every capsule outlined on the H&E, and one capsule's 2 µm spots split at
-p = 0.5, 0.3 and 0.1 on the full-resolution image — replaces RECOMB's hand-composited
-`podocytes.png`. It needs the 4.3 GB full-resolution H&E (`kidney-he-fullres` in `data_sources.yaml`):
+Files in `kidney/results/` are named `<experiment>_<condition>_<content>`: `split` (spot splitting) or `downsample`
+(UMI downsampling), `null` (no DEGs) or `degs` (planted DEGs), with the replicate count where two runs of the same
+experiment sit side by side. They were renamed on 2026-09-27; the vault's figure-style decision maps the old names.
+
+Spot splitting, behind the two kidney panels both manuscripts show (`split_null_fpr`, `split_degs_summary`;
+the manuscripts still include them under their old names, `2um_nodeg_fpr.eps` and
+`withdeg_2um_100rep_with_auc_lfc3_pretty_plot_summary.eps`). About 4 minutes per run on a 16 GB laptop, 8 workers:
+
+```bash
+python -m kidney.spot_split --n_shape_ids_remove 35 --n_reps 100 --output kidney/results/split_null.pdf
+python -m kidney.spot_split --n_shape_ids_remove 35 --q 0.005 --lfc 3 --n_reps 100 \
+    --output kidney/results/split_degs.pdf
+python -m kidney.fpr_plots --csv_file kidney/results/split_null_results.csv \
+    --output kidney/results/split_null_fpr.pdf --split
+python -m kidney.spot_split_plots \
+    --csv_file kidney/results/split_degs_results.csv \
+    --json_file kidney/results/split_degs_pr_curve_data.json \
+    --output_prefix kidney/results/split_degs
+```
+
+`spot_split` draws no figure; its `--output` only names the results files. The no-DEG run also writes
+`split_null_per_split.csv`, one row per split and method: the seed, the genes tested and the DEGs called. The FPR panels plot the mean over replicates on a linear axis, with bars of one SD; `fpr_plots` also
+writes a `_log.pdf` of each on a log axis, where zero gets its own row below a break instead of a floor.
+The FPR panels of `downsample_degs_*_tpr_fpr.pdf`, `split_degs_tpr_fpr.pdf` and the `*_summary.pdf` figures use that axis too.
+Every figure with p on its x-axis also comes as `*_odds.pdf`, plotted against $(1-p)/p$, which grows as the test gets
+harder: for $p_\mathrm{split}$ it is the ratio of the two groups' sampling variances, as Var(Y)/Var(X) in the synthetic NB
+figures. `spot_split_plots` also writes `*_pr_auc.pdf`, the summary's PR-AUC panel alone; `*_pr_curves.pdf`
+is its PR-curve panel alone.
+
+The capsule figures — every capsule outlined on the H&E (`capsule_overview.pdf`), and one capsule's
+2 µm spots split at $p_\mathrm{split}$ = 0.5, 0.3 and 0.1 on the full-resolution image, group A in blue and B in
+orange (`capsule_split_illustration.pdf`) — replace RECOMB's hand-composited `podocytes.png`. They need the 4.3 GB full-resolution H&E (`kidney-he-fullres` in `data_sources.yaml`):
 
 ```bash
 python -m fetch_data --arm kidney          # includes the full-resolution H&E
-python -m kidney.capsule_figure            # ~3 s -> kidney/results/capsule_split_illustration.pdf
+python -m kidney.capsule_figure            # ~3 s -> kidney/results/capsule_overview.pdf, capsule_split_illustration.pdf
 ```
 
 **These parameters come from the manuscript, not from the code.** `--n_cells_remove`, `--q` and
@@ -319,7 +353,7 @@ published figure. The values now shown are what `main_recomb25.tex` states:
 
 | Flag | Value | Source |
 |---|---|---|
-| `--n_cells_remove` | 35 | "we first filtered out the 35 capsules with the lowest total UMI" (§ Visium HD); the panels are also named `fdr_results_35.eps` and `DE_plot_lfc3.eps` |
+| `--n_cells_remove` | 35 | "we first filtered out the 35 capsules with the lowest total UMI" (§ Visium HD); the published panels were named `fdr_results_35.eps` and `DE_plot_lfc3.eps` |
 | `--q` | 0.005 | "With probability 0.005, we sample DEGs ... around 90 DEGs" |
 | `--lfc` | 3 | "amplified to ensure a three-fold $\log_2$ change, i.e. LFC=3" |
 | `--n_reps` | 10000 | "For each downsampling ratio $p$, 10,000 random tests were ran" |
@@ -331,9 +365,11 @@ Change `--lfc` and you must change `--p_min` with it; the script defaults (`p_mi
 constraint for LFC=3 only by being close to 0.125, and violate it for any LFC below 3.
 
 `spot_split`'s capsule filter has no published value: the spot-subsampling section states no
-filtering, so the commands above keep all 161 capsules (`--n_shape_ids_remove 0`). Each capsule puts one
-semi-capsule in each group, so capsule library size cannot separate the groups the way it does in the
-UMI arms. Its other defaults, `p_min 0.1 / p_max 0.5 / p_steps 10`, match the published panels, whose
+filtering. The commands above drop the same 35 smallest capsules as the UMI arms (`--n_shape_ids_remove 35`,
+since 2026-09-27). With all 161, the smallest capsules (186 to 450 UMIs) give semi-capsules in which one
+count is worth about 100 times a typical CP10k value, and LN's $t$-test then calls a false DEG in 34-100%
+of no-DEG splits; without them, in 2-9%. The all-161 outputs are in `kidney/results/archive/all_capsules_2026-09-27/`.
+Its other defaults, `p_min 0.1 / p_max 0.5 / p_steps 10`, match the published panels, whose
 PR curves are drawn at p = 0.100, 0.322 and 0.500.
 
 `spot_split` keeps the 2 µm matrix sparse. It used to densify it — 546K spots x 18K genes, ~40 GB as
@@ -341,8 +377,17 @@ float32 — and copy it into shared memory, which only a server could hold; the 
 are the same numbers from the same random draws. Its per-replicate seeds now come from `--seed`
 (default 0) instead of an unseeded RNG, and a re-run is byte-identical.
 
-**Full-depth check, 2026-09-24.** Before any subsampling, splitting all 161 capsules by whether
-total UMI exceeds the median library size reproduces the manuscript's negative-control counts:
+**Full-depth negative control.** `python -m kidney.full_depth` (seconds) splits all 161 capsules at the
+median library size, with no downsampling and no capsule removed, and writes the DEGs each method calls
+under BH and under Bonferroni to `full_depth_null.csv`, plotting the BH counts in `full_depth_null.pdf`.
+It repeats the split after removing the 20 and the 35 lowest-UMI capsules, and `full_depth_null_by_removal.pdf`
+puts the three capsule sets side by side (BH: 627 / 7,130 / 10,742, then 1 / 1,137 / 3,879, then 0 / 0 / 0).
+`python -m kidney.capsule_qc` (about 10 s) shows why the other kidney runs drop the 35 capsules with the lowest
+total UMI, the reason `main_recomb25.tex:751` gives: `capsule_qc.pdf` has the capsule-size distribution, split at
+the median into the shallower and the deeper half, and the DEGs each method calls on this split as the smallest capsules are removed one by one
+(`capsule_removal_scan.csv`). Every method calls none from 33 removed; 35 leaves two to spare.
+Under BH: LN 627, log1p 7,130, Wilcoxon 10,742, of 15,216 genes. The manuscript's numbers are the
+Bonferroni ones, which a one-off check on 2026-09-24 had already reproduced:
 
 | Method | Here | `main_recomb25.tex` |
 |---|---|---|
@@ -411,7 +456,7 @@ hold, and each is easy to undo by accident:
 - `clustering/plots.py` seeds the global RNG before each stripplot, which is where seaborn draws its jitter.
 - `lymphnode/subsampling.py` sorts its results before writing, because workers finish in any order.
 
-The exceptions: `lymphnode/de_time_s_vs_subsampling.pdf`, the `de_time_s` columns of the lymph node CSVs,
+The exceptions: `lymphnode/results/runtime.pdf`, the `de_time_s` columns of the lymph node CSVs,
 and a timing field in its metadata JSON.
 
 The checksums of the current outputs are in each arm's `results/checksums.sha256`, outside git; verify one
@@ -435,13 +480,16 @@ Getting a figure into the paper is a manual copy from the arm's `results/`, unde
 `bonferroni_2026-09-25` (Bonferroni for every method). `output/` now holds only scratch from earlier
 verification sessions.
 
+Figure files were renamed on 2026-09-27 (kidney, synthetic NB, CITE-seq, lymph node); the vault's figure-style
+decision maps old names to new, and the manuscripts still include the old ones until the figures are copied again.
+
 **Nine tracked files live under `*/results/`**, committed before results were ignored:
 
 ```
 celltype/results/kang_{B,T}_markers.csv
 citeseq/results/CITE_seq_{results,metrics}.csv
-citeseq/results/CITE_seq_lfc_error_plot.png
-citeseq/results/CD{3,4,45RA}_density_plot.pdf
+citeseq/results/CITE_seq_lfc_error_plot.png         # moved to archive/stale_png_2026-09-27/ on 2026-09-27
+citeseq/results/CD{3,4,45RA}_density_plot.pdf       # renamed gating_{cd3,cd4,cd45ra}.pdf on 2026-09-27
 synthetic_nb/results/de_metrics_mu10_nobatch.csv
 ```
 
